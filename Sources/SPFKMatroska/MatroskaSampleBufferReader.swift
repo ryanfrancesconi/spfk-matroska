@@ -137,4 +137,16 @@ public final class MatroskaSampleBufferReader: @unchecked Sendable {
     public var duration: TimeInterval? {
         reader.file.duration
     }
+
+    /// Whether this package can open `url` for playback.
+    ///
+    /// Answered by reading the file's headers rather than its extension, so it is true only when
+    /// there is really a video track with a codec that can be described — a `.mkv` carrying DTS
+    /// video, or a file misnamed `.mkv`, answers false rather than failing later.
+    ///
+    /// Costs the header parse, not a cluster walk, and a caller that gets `true` is about to open
+    /// the file anyway.
+    public static func canOpen(url: URL) -> Bool {
+        (try? MatroskaSampleBufferReader(url: url)) != nil
+    }
 }
