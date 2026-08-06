@@ -147,6 +147,29 @@ final class MatroskaVideoDecoderTests {
             try MatroskaVideoDecoder(url: mka)
         }
     }
+
+    /// The poster frame both products call, sampled at the shared midpoint rule rather than at
+    /// frame zero — the difference between a thumbnail and a black rectangle.
+    @Test func posterFrameComesFromTheMidpointNotTheOpening() throws {
+        let poster = try #require(MatroskaVideoDecoder.posterCGImage(url: mkv))
+        let opening = try #require(try MatroskaVideoDecoder.firstCGImage(url: mkv))
+
+        #expect(poster.width == 160)
+        #expect(poster.height == 120)
+        #expect(poster.dataProvider?.data != opening.dataProvider?.data)
+    }
+
+    /// A container this package does not handle is the *expected* input on the fallback path both
+    /// products use, so it answers nil quietly rather than logging an error for every MP4 that
+    /// reaches it.
+    @Test func posterFrameIsNilForANonMatroskaFile() {
+        #expect(MatroskaVideoDecoder.posterCGImage(url: TestBundleResources.shared.sample_mov) == nil)
+    }
+
+    /// Audio-only Matroska is a real file this can be handed; there is simply no picture in it.
+    @Test func posterFrameIsNilForAFileWithNoVideoTrack() {
+        #expect(MatroskaVideoDecoder.posterCGImage(url: mka) == nil)
+    }
 }
 
 // MARK: - Seeking
@@ -208,5 +231,39 @@ final class MatroskaSeekTests {
 
         #expect(first.width == middle.width)
         #expect(first.dataProvider?.data != middle.dataProvider?.data)
+    }
+
+    /// The layout real muxers write: the `SeekHead` at the head of the file names a second one
+    /// rather than naming `Cues`. libwebm keeps only the first `SeekHead` and never follows a
+    /// nested entry, so reading no further finds no index at all and the seek falls back to the
+    /// start of the file — indistinguishable from working, and black on anything that opens dark.
+    @Test func seeksInAFileWhoseSeekHeadIsNested() throws {
+        let url = TestBundleResources.shared.sample_nested_seekhead_mkv
+        let reader = try MatroskaFrameReader(url: url)
+        let track = try #require(reader.file.videoTrack)
+
+        try reader.seek(to: 1.5, trackNumber: track.number)
+
+        let frame = try #require(try reader.allFrames(ofTrack: track.number).first)
+
+        #expect(frame.isKeyframe)
+        #expect(abs(frame.timestamp - 1.048) < 0.001)
+    }
+
+    /// Each cue point names one track and the audio ones fall between the video keyframes, so the
+    /// cue point nearest 1.5 s is the 1300 ms *audio* one. Matching by time and then asking that
+    /// point for the video track finds nothing and abandons the seek; the track has to stay in the
+    /// search, which lands on the 1048 ms keyframe.
+    @Test func seeksVideoInAFileWhoseCuePointsInterleave() throws {
+        let url = TestBundleResources.shared.sample_interleaved_cues_mkv
+        let reader = try MatroskaFrameReader(url: url)
+        let track = try #require(reader.file.videoTrack)
+
+        try reader.seek(to: 1.5, trackNumber: track.number)
+
+        let frame = try #require(try reader.allFrames(ofTrack: track.number).first)
+
+        #expect(frame.isKeyframe)
+        #expect(abs(frame.timestamp - 1.048) < 0.001)
     }
 }

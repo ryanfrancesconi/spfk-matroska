@@ -9,6 +9,101 @@
 @property (nonatomic, readwrite, nullable) NSError *failure;
 @end
 
+/// How many SeekHead elements deep to follow before giving up. Two levels is the shape real files
+/// have; the cap exists so a file whose SeekHeads point at each other cannot loop.
+static const int MKVMaxSeekHeadDepth = 4;
+
+/// The segment-relative position of the `Cues` element reachable from the SeekHead at
+/// `seekHeadOffset`, or -1.
+///
+/// libwebm keeps only the **first** SeekHead and its `Parse` never follows an entry that names
+/// another one, so a file written in the usual two-level form -- a small SeekHead at the head of
+/// the file naming a second one at the tail, which names Cues -- looks to it like a file with no
+/// index at all. Walking the chain here rather than patching the vendored parser keeps
+/// `spfk-mkvparser` a clean mirror of upstream.
+///
+/// Reads through mkvparser's own EBML primitives, so this is a traversal rather than a second
+/// implementation of the format.
+static long long MKVCuesOffsetInSeekHead(mkvparser::Segment *segment,
+                                         long long seekHeadOffset,
+                                         int depth) {
+    if (segment == nullptr || seekHeadOffset < 0 || depth > MKVMaxSeekHeadDepth) {
+        return -1;
+    }
+
+    mkvparser::IMkvReader *reader = segment->m_pReader;
+    const long long segmentStop = (segment->m_size < 0) ? -1 : segment->m_start + segment->m_size;
+
+    long long pos = segment->m_start + seekHeadOffset;
+
+    if (segmentStop >= 0 && pos >= segmentStop) {
+        return -1;
+    }
+
+    long long id = 0;
+    long long size = 0;
+
+    if (mkvparser::ParseElementHeader(reader, pos, segmentStop, id, size) < 0 ||
+        id != libwebm::kMkvSeekHead) {
+        return -1;
+    }
+
+    const long long stop = pos + size;
+
+    // Cues wins over a nested SeekHead, so the whole level is read before recursing rather than
+    // descending at the first SeekHead entry -- a file naming both would otherwise take the long
+    // way around to the same place.
+    long long nestedOffset = -1;
+
+    while (pos < stop) {
+        long long entryID = 0;
+        long long entrySize = 0;
+
+        if (mkvparser::ParseElementHeader(reader, pos, stop, entryID, entrySize) < 0) {
+            return -1;
+        }
+
+        const long long entryStop = pos + entrySize;
+
+        if (entryID == libwebm::kMkvSeek) {
+            long long targetID = -1;
+            long long targetOffset = -1;
+            long long field = pos;
+
+            while (field < entryStop) {
+                long long fieldID = 0;
+                long long fieldSize = 0;
+
+                if (mkvparser::ParseElementHeader(reader, field, entryStop, fieldID, fieldSize) < 0) {
+                    return -1;
+                }
+
+                if (fieldID == libwebm::kMkvSeekID) {
+                    long length = 0;
+                    targetID = mkvparser::ReadID(reader, field, length);
+                } else if (fieldID == libwebm::kMkvSeekPosition) {
+                    targetOffset = mkvparser::UnserializeUInt(reader, field, fieldSize);
+                }
+
+                field += fieldSize;
+            }
+
+            if (targetID == libwebm::kMkvCues && targetOffset >= 0) {
+                return targetOffset;
+            }
+
+            // Never revisit the level being read, which is what a self-referential entry asks for.
+            if (targetID == libwebm::kMkvSeekHead && targetOffset >= 0 && targetOffset != seekHeadOffset) {
+                nestedOffset = targetOffset;
+            }
+        }
+
+        pos = entryStop;
+    }
+
+    return (nestedOffset >= 0) ? MKVCuesOffsetInSeekHead(segment, nestedOffset, depth + 1) : -1;
+}
+
 @implementation MKVFrameReader {
     // The reader must outlive the segment, which holds a borrowed pointer to it.
     mkvparser::MkvReader *_reader;
@@ -140,6 +235,10 @@
 /// `ParseHeaders` stops at the first cluster and the Cues element is written at the *end* of the
 /// file, so the segment has no index until someone asks for it -- the SeekHead is the only thing
 /// pointing at it, and following that entry is what turns a seek from a scan into a lookup.
+///
+/// The already-parsed SeekHead is checked first because it costs nothing; a file that names Cues
+/// only through a nested SeekHead needs the chain walked, which is what ``MKVCuesOffsetInSeekHead``
+/// does.
 - (nullable const mkvparser::Cues *)loadCues {
     if (const mkvparser::Cues *cues = _segment->GetCues()) {
         return cues;
@@ -151,24 +250,33 @@
         return nullptr;
     }
 
+    long long cuesOffset = -1;
+
     for (int index = 0; index < seekHead->GetCount(); index++) {
         const mkvparser::SeekHead::Entry *entry = seekHead->GetEntry(index);
 
-        if (entry == nullptr || entry->id != libwebm::kMkvCues) {
-            continue;
+        if (entry != nullptr && entry->id == libwebm::kMkvCues) {
+            cuesOffset = entry->pos;
+            break;
         }
-
-        long long position = 0;
-        long length = 0;
-
-        if (_segment->ParseCues(entry->pos, position, length) < 0) {
-            return nullptr;
-        }
-
-        return _segment->GetCues();
     }
 
-    return nullptr;
+    if (cuesOffset < 0) {
+        cuesOffset = MKVCuesOffsetInSeekHead(_segment, seekHead->m_element_start - _segment->m_start, 0);
+    }
+
+    if (cuesOffset < 0) {
+        return nullptr;
+    }
+
+    long long position = 0;
+    long length = 0;
+
+    // A nonzero return means "no Cues here" rather than a malformed file, and `GetCues` answers
+    // that the same way, so the result is read rather than the status.
+    _segment->ParseCues(cuesOffset, position, length);
+
+    return _segment->GetCues();
 }
 
 - (BOOL)seekToTimeNanoseconds:(long long)timeNanoseconds
@@ -199,11 +307,46 @@
         cues->LoadCuePoint();
     }
 
+    // Deliberately not `Cues::Find`. That matches a cue point by time and *then* asks it for the
+    // track, so a file whose cue points name one track each -- audio and video alternating -- loses
+    // the seek whenever the point nearest the target belongs to the other track. libwebm's own TODO
+    // in `mkvparser.cc` describes the same defect. Keeping the track inside the search is the fix,
+    // and cue points are in ascending time order, so the last match at or before the target wins.
     const mkvparser::CuePoint *cuePoint = nullptr;
     const mkvparser::CuePoint::TrackPosition *trackPosition = nullptr;
 
-    if (!cues->Find(timeNanoseconds, track, cuePoint, trackPosition) || cuePoint == nullptr ||
-        trackPosition == nullptr) {
+    // A target before the track's first cue point has nothing at or before it; the earliest point
+    // naming the track is then the only answer, and is where the track begins anyway.
+    const mkvparser::CuePoint *earliestPoint = nullptr;
+    const mkvparser::CuePoint::TrackPosition *earliestPosition = nullptr;
+
+    for (const mkvparser::CuePoint *point = cues->GetFirst(); point != nullptr;
+         point = cues->GetNext(point)) {
+        const mkvparser::CuePoint::TrackPosition *position = point->Find(track);
+
+        if (position == nullptr) {
+            continue;
+        }
+
+        if (earliestPoint == nullptr) {
+            earliestPoint = point;
+            earliestPosition = position;
+        }
+
+        if (point->GetTime(_segment) > timeNanoseconds) {
+            break;
+        }
+
+        cuePoint = point;
+        trackPosition = position;
+    }
+
+    if (cuePoint == nullptr) {
+        cuePoint = earliestPoint;
+        trackPosition = earliestPosition;
+    }
+
+    if (cuePoint == nullptr || trackPosition == nullptr) {
         if (error != nullptr) {
             *error = MKVMakeError(MKVErrorNoSeekIndex, _url, @"No cue point for that time.");
         }

@@ -3,6 +3,8 @@
 import CoreMedia
 import CoreVideo
 import Foundation
+import SPFKBase
+import SPFKVideo
 import VideoToolbox
 
 /// One decoded picture.
@@ -138,6 +140,42 @@ public final class MatroskaVideoDecoder {
         return frame.cgImage
     }
 
+    /// The poster frame for a Matroska file, or `nil` for anything this package cannot open.
+    ///
+    /// Samples ``SPFKVideo/VideoFrameExtractor/posterFrameTimestamp(duration:)`` — the same rule
+    /// AVFoundation-openable formats get — so a Matroska thumbnail and an MP4 one sitting next to
+    /// each other in a list come from the same place in their respective files. A file reporting no
+    /// duration falls back to the first frame, which is all there is to offer.
+    ///
+    /// **Not throwing, and silent about a non-Matroska file.** Every caller reaches this as a
+    /// fallback after something else declined the URL, so "this is an MP4" is the expected answer
+    /// rather than an error worth reporting. A file that *is* Matroska and still fails is logged.
+    /// Matching ``MatroskaFile/videoTrackProperties(for:)``, which resolves the same way.
+    ///
+    /// The container is identified by reading its EBML header rather than by extension, so there is
+    /// no list here to fall out of step with the ones in `AudioFileType`.
+    ///
+    /// Synchronous and not cheap — a seek plus one GOP. Call it off the main actor.
+    public static func posterCGImage(url: URL) -> CGImage? {
+        do {
+            let duration = try MatroskaFile(url: url).duration ?? 0
+            let timestamp = VideoFrameExtractor.posterFrameTimestamp(duration: duration)
+
+            guard timestamp > 0 else {
+                return try firstCGImage(url: url)
+            }
+
+            return try cgImage(url: url, at: timestamp)
+
+        } catch MatroskaError.notMatroska {
+            return nil
+
+        } catch {
+            Log.error("Failed to read a Matroska poster frame for \(url.lastPathComponent)", error)
+            return nil
+        }
+    }
+
     /// Repositions to the keyframe at or before `timestamp` and clears the decoder's state.
     ///
     /// - Throws: ``MatroskaError/noSeekIndex(_:)`` when the file carries no index.
@@ -161,7 +199,10 @@ public final class MatroskaVideoDecoder {
         do {
             try decoder.seek(to: timestamp)
         } catch MatroskaError.noSeekIndex {
-            // Keep going from the start rather than failing the preview outright.
+            // Keep going from the start rather than failing the preview outright. Logged because
+            // the fallback is otherwise indistinguishable from a working seek: the caller gets a
+            // picture either way, and the picture from frame zero is black for most films.
+            Log.debug("No usable seek index in \(url.lastPathComponent); poster falls back to the first frame")
         }
 
         return try decoder.nextImage()?.cgImage
