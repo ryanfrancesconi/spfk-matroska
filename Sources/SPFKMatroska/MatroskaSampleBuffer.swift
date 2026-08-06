@@ -16,6 +16,9 @@ public enum MatroskaSampleBufferError: Error, Equatable, Sendable {
     /// The track is not video, or states no pixel dimensions.
     case missingVideoParameters
 
+    /// The track is not audio, or states no sample rate.
+    case missingAudioParameters
+
     /// Core Media refused the description or the buffer. Carries its `OSStatus`.
     case coreMediaFailure(OSStatus)
 }
@@ -84,6 +87,58 @@ public extension MatroskaTrack {
         return formatDescription
     }
 
+    /// Builds the `CMAudioFormatDescription` a renderer needs to decode this track's packets.
+    ///
+    /// `CodecPrivate` becomes the magic cookie for the codecs that need one — for AAC that blob
+    /// *is* the AudioSpecificConfig, the same "stored verbatim" property `avcC` has on the video
+    /// side. See ``MatroskaAudioCodec/usesCodecPrivateAsMagicCookie``.
+    ///
+    /// - Throws: ``MatroskaSampleBufferError``.
+    func makeAudioFormatDescription() throws -> CMAudioFormatDescription {
+        guard case let .audio(parameters) = kind, parameters.sampleRate > 0 else {
+            throw MatroskaSampleBufferError.missingAudioParameters
+        }
+
+        guard let codec = MatroskaAudioCodec(rawValue: codecID) else {
+            throw MatroskaSampleBufferError.unsupportedCodec(codecID)
+        }
+
+        var description = AudioStreamBasicDescription(
+            mSampleRate: parameters.sampleRate,
+            mFormatID: codec.formatID,
+            mFormatFlags: 0,
+            mBytesPerPacket: 0,
+            mFramesPerPacket: codec.framesPerPacket,
+            mBytesPerFrame: 0,
+            mChannelsPerFrame: UInt32(parameters.channelCount),
+            mBitsPerChannel: 0,
+            mReserved: 0
+        )
+
+        let cookie = codec.usesCodecPrivateAsMagicCookie ? codecPrivate : nil
+
+        var formatDescription: CMAudioFormatDescription?
+
+        let status = (cookie.flatMap { $0.isEmpty ? nil : $0 } ?? Data()).withUnsafeBytes { bytes in
+            CMAudioFormatDescriptionCreate(
+                allocator: kCFAllocatorDefault,
+                asbd: &description,
+                layoutSize: 0,
+                layout: nil,
+                magicCookieSize: bytes.count,
+                magicCookie: bytes.count > 0 ? bytes.baseAddress : nil,
+                extensions: nil,
+                formatDescriptionOut: &formatDescription
+            )
+        }
+
+        guard status == noErr, let formatDescription else {
+            throw MatroskaSampleBufferError.coreMediaFailure(status)
+        }
+
+        return formatDescription
+    }
+
     /// Codecs whose parameter sets live outside the bitstream, so a decoder cannot start without
     /// the configuration blob.
     private static let requiresCodecPrivate: Set<String> = ["V_MPEG4/ISO/AVC", "V_MPEGH/ISO/HEVC"]
@@ -111,8 +166,11 @@ public extension MatroskaFrame {
     /// container-level DTS, and frames come out of the demuxer in stored order — which *is* decode
     /// order. Inventing a DTS would either duplicate that ordering or contradict it.
     ///
+    /// Takes a plain `CMFormatDescription` rather than the video-specific spelling because audio
+    /// frames go through the same packaging — one Matroska frame is one packet either way.
+    ///
     /// - Throws: ``MatroskaSampleBufferError``.
-    func makeSampleBuffer(formatDescription: CMVideoFormatDescription) throws -> CMSampleBuffer {
+    func makeSampleBuffer(formatDescription: CMFormatDescription) throws -> CMSampleBuffer {
         var blockBuffer: CMBlockBuffer?
 
         var status = CMBlockBufferCreateWithMemoryBlock(
