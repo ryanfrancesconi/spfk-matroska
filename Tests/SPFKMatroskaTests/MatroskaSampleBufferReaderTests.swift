@@ -79,11 +79,24 @@ struct MatroskaSampleBufferReaderTests {
     }
 
     /// Audio has no reordering to do, so unlike video it must come out already ascending.
-    @Test func audioArrivesInPresentationOrder() throws {
+    ///
+    /// **Strictly** ascending, which is the part that matters. Matroska laces several audio frames
+    /// into one block and stores a single timestamp for it, so a reader that reports the block's
+    /// time for each of them hands a renderer a pile of packets all claiming the same instant —
+    /// audible as a stutter, and invisible to any check that only asks whether the list is sorted.
+    ///
+    /// Verified against a real laced file (`DualAudio` anime rips lace; a WEBRip typically does
+    /// not): before the fix its first eight audio packets all read 0.009, after it they step by
+    /// 21.333 ms, matching `ffprobe`. The fixtures here are unlaced, so this test pins the
+    /// invariant rather than the lacing arithmetic.
+    @Test func audioArrivesInStrictlyIncreasingOrder() throws {
         let timestamps = try readAll(url: mkv).audio.map(\.presentationTimeStamp.seconds)
 
         #expect(timestamps.isEmpty == false)
         #expect(timestamps == timestamps.sorted())
+
+        let duplicates = zip(timestamps, timestamps.dropFirst()).filter { $0 >= $1 }
+        #expect(duplicates.isEmpty)
     }
 
     // MARK: - Format descriptions

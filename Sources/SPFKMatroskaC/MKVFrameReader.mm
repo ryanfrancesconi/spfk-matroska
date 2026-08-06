@@ -418,6 +418,10 @@ static long long MKVCuesOffsetInSeekHead(mkvparser::Segment *segment,
             continue;
         }
 
+        // Kept before the walk advances: a laced block holds several frames that all share the
+        // block's timestamp, and each one's real time is that plus its position in the lace.
+        const int laceIndex = _frameIndex;
+
         const mkvparser::Block::Frame &frame = block->GetFrame(_frameIndex);
         _frameIndex++;
 
@@ -434,11 +438,24 @@ static long long MKVCuesOffsetInSeekHead(mkvparser::Segment *segment,
         }
 
         const long long trackNumber = block->GetTrackNumber();
+        const long long defaultDuration = _defaultDurations[@(trackNumber)].longLongValue;
+
+        // **Laced frames must be spread across the block's span, not stacked on its timestamp.**
+        // Matroska packs several audio frames into one block and stores a single time for it; the
+        // rest are implied by the track's `DefaultDuration`, which is what that element is for and
+        // why a laced track states one. Handing a renderer eight packets that all claim the same
+        // instant is audible as a stutter, and libwebm hands back the block time for every frame,
+        // so nothing else would space them.
+        long long timestamp = block->GetTime(_cluster);
+
+        if (laceIndex > 0 && defaultDuration > 0) {
+            timestamp += (long long)laceIndex * defaultDuration;
+        }
 
         return [[MKVFrame alloc] initWithTrackNumber:trackNumber
                                                 data:data
-                                timestampNanoseconds:block->GetTime(_cluster)
-                                 durationNanoseconds:_defaultDurations[@(trackNumber)].longLongValue
+                                timestampNanoseconds:timestamp
+                                 durationNanoseconds:defaultDuration
                                           isKeyframe:block->IsKey()];
     }
 }
