@@ -16,6 +16,13 @@ public struct MatroskaVideoFrame {
     public let timestamp: TimeInterval
 
     public let isKeyframe: Bool
+
+    /// The picture as a `CGImage`, or `nil` if the pixel format cannot be converted.
+    public var cgImage: CGImage? {
+        var result: CGImage?
+        VTCreateCGImageFromCVPixelBuffer(image, options: nil, imageOut: &result)
+        return result
+    }
 }
 
 /// Decodes a Matroska or WebM file's video track to pictures, through VideoToolbox.
@@ -114,6 +121,21 @@ public final class MatroskaVideoDecoder {
     /// open, and the one frame reachable without a seek index.
     public func firstImage() throws -> MatroskaVideoFrame? {
         try nextImage()
+    }
+
+    /// The first picture as a `CGImage`, for a still preview.
+    ///
+    /// Convenience for the common case: a caller that wants one picture out of a file AVFoundation
+    /// will not open, without setting up a decode loop. Opening, decoding and closing costs the
+    /// front of the file rather than a scan, because the first frame is in the first cluster.
+    public static func firstCGImage(url: URL) throws -> CGImage? {
+        let decoder = try MatroskaVideoDecoder(url: url)
+
+        guard let frame = try decoder.firstImage() else {
+            return nil
+        }
+
+        return frame.cgImage
     }
 
     /// Skips the interleaved audio and subtitle frames the demuxer hands back alongside video.

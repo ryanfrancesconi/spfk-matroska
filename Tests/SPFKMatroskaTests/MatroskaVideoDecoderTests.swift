@@ -133,6 +133,15 @@ final class MatroskaVideoDecoderTests {
         #expect(meanLuma(frame.image) > 1)
     }
 
+    /// The still-preview path: one picture out of a container AVFoundation will not open, without
+    /// the caller running a decode loop.
+    @Test func producesACGImageForAStillPreview() throws {
+        let image = try #require(try MatroskaVideoDecoder.firstCGImage(url: mkv))
+
+        #expect(image.width == 160)
+        #expect(image.height == 120)
+    }
+
     @Test func refusesAFileWithNoVideoTrack() {
         #expect(throws: MatroskaVideoDecoderError.noVideoTrack(mka)) {
             try MatroskaVideoDecoder(url: mka)
