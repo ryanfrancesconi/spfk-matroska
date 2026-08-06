@@ -57,6 +57,12 @@ public struct MatroskaFile: Hashable, Sendable {
             throw MatroskaError.from(error, url: url)
         }
 
+        self.init(url: url, description: description)
+    }
+
+    /// Wraps headers a caller already has, so opening a file for frames does not mean parsing its
+    /// headers a second time to describe it.
+    init(url: URL, description: MKVSegmentDescription) {
         self.url = url
         docType = DocType(description.docType)
         title = description.title
@@ -72,20 +78,20 @@ public struct MatroskaFile: Hashable, Sendable {
 
 // MARK: - Track lookup
 
-public extension MatroskaFile {
+extension MatroskaFile {
     /// The first video track, which is the one to display. Matroska allows several; no consumer
     /// here has a use for the others yet.
-    var videoTrack: MatroskaTrack? {
+    public var videoTrack: MatroskaTrack? {
         tracks.first { if case .video = $0.kind { true } else { false } }
     }
 
     /// The first audio track, which is the one to play.
-    var audioTrack: MatroskaTrack? {
+    public var audioTrack: MatroskaTrack? {
         tracks.first { if case .audio = $0.kind { true } else { false } }
     }
 
     /// The track carrying `number`, which blocks reference rather than an index.
-    func track(number: Int) -> MatroskaTrack? {
+    public func track(number: Int) -> MatroskaTrack? {
         tracks.first { $0.number == number }
     }
 }

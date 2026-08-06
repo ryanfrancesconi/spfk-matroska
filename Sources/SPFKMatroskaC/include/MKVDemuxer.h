@@ -8,7 +8,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 extern NSErrorDomain const MKVErrorDomain;
 
-typedef NS_ERROR_ENUM(MKVErrorDomain, MKVError) {
+typedef NS_ERROR_ENUM(MKVErrorDomain, MKVError){
     /// The file could not be opened for reading.
     MKVErrorUnreadableFile = 1,
     /// No valid EBML header -- the file is not Matroska or WebM at all.
@@ -28,8 +28,7 @@ typedef NS_ERROR_ENUM(MKVErrorDomain, MKVError) {
 
 /// Parses the EBML and segment headers, stopping at the first cluster. Cheap: it reads the front
 /// of the file, not the frame data.
-+ (nullable MKVSegmentDescription *)readSegmentDescriptionAtURL:(NSURL *)url
-                                                          error:(NSError **)error;
++ (nullable MKVSegmentDescription *)readSegmentDescriptionAtURL:(NSURL *)url error:(NSError **)error;
 
 @end
 

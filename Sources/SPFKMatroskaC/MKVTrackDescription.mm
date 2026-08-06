@@ -35,33 +35,32 @@ NSString *_Nullable MKVStringOrNil(const char *_Nullable value) {
     }
 
     switch (track->GetType()) {
-        case mkvparser::Track::kVideo: {
-            const auto *video = static_cast<const mkvparser::VideoTrack *>(track);
-            _pixelWidth = video->GetWidth();
-            _pixelHeight = video->GetHeight();
-            _displayWidth = video->GetDisplayWidth();
-            _displayHeight = video->GetDisplayHeight();
-            _displayUnit = video->GetDisplayUnit();
-            _frameRate = video->GetFrameRate();
-            break;
-        }
-        case mkvparser::Track::kAudio: {
-            const auto *audio = static_cast<const mkvparser::AudioTrack *>(track);
-            _sampleRate = audio->GetSamplingRate();
-            _channelCount = audio->GetChannels();
-            _bitDepth = audio->GetBitDepth();
-            break;
-        }
-        default:
-            break;
+    case mkvparser::Track::kVideo: {
+        const auto *video = static_cast<const mkvparser::VideoTrack *>(track);
+        _pixelWidth = video->GetWidth();
+        _pixelHeight = video->GetHeight();
+        _displayWidth = video->GetDisplayWidth();
+        _displayHeight = video->GetDisplayHeight();
+        _displayUnit = video->GetDisplayUnit();
+        _frameRate = video->GetFrameRate();
+        break;
+    }
+    case mkvparser::Track::kAudio: {
+        const auto *audio = static_cast<const mkvparser::AudioTrack *>(track);
+        _sampleRate = audio->GetSamplingRate();
+        _channelCount = audio->GetChannels();
+        _bitDepth = audio->GetBitDepth();
+        break;
+    }
+    default:
+        break;
     }
 
     return self;
 }
 
 - (NSString *)description {
-    return [NSString stringWithFormat:@"<MKVTrackDescription %lld type:%ld codec:%@>",
-                                      _number, (long)_type, _codecID];
+    return [NSString stringWithFormat:@"<MKVTrackDescription %lld type:%ld codec:%@>", _number, (long)_type, _codecID];
 }
 
 @end

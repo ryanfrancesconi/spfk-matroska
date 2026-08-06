@@ -28,8 +28,7 @@
 }
 
 - (NSString *)description {
-    return [NSString stringWithFormat:@"<MKVSegmentDescription %@ %lldns tracks:%lu>",
-                                      _docType, _durationNanoseconds,
+    return [NSString stringWithFormat:@"<MKVSegmentDescription %@ %lldns tracks:%lu>", _docType, _durationNanoseconds,
                                       (unsigned long)_tracks.count];
 }
 

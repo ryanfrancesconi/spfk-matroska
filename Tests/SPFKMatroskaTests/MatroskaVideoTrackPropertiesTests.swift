@@ -52,12 +52,27 @@ final class MatroskaVideoTrackPropertiesTests {
         #expect(properties.codec == "vp09")
     }
 
-    /// Left `nil` on purpose — see `videoTrackProperties`. A plausible-looking wrong duration is
-    /// worse than a blank one, since the segment duration is not the video track's.
+    /// Duration is the *segment's*, an upper bound on the video track's, because Matroska states no
+    /// per-track duration. Measured against the `.mov` it was remuxed from rather than asserted
+    /// away: the video track is exactly 2.0s (60 frames at 30fps) while the segment runs to 2.066s,
+    /// the extra 66ms being the audio track's tail. Roughly two frames, so the gap is real and
+    /// worth knowing before anything starts computing with this value.
+    @Test func durationIsTheSegmentsNotTheVideoTracks() async throws {
+        let properties = try #require(try MatroskaFile(url: mkv).videoTrackProperties)
+        let duration = try #require(properties.duration)
+
+        #expect(abs(duration - 2.066) < 0.001)
+
+        let reference = try #require(await VideoTrackReader.read(from: mov).videoTrack?.duration)
+        #expect(abs(reference - 2.0) < 0.001)
+        #expect(duration > reference)
+    }
+
+    /// `preciseFrameRate` needs the exact rational frame duration and `rotationDegrees` needs the
+    /// `Projection` element; neither is read yet, and a guess is worse than a blank.
     @Test func leavesUnknowableFieldsNil() throws {
         let properties = try #require(try MatroskaFile(url: mkv).videoTrackProperties)
 
-        #expect(properties.duration == nil)
         #expect(properties.preciseFrameRate == nil)
         #expect(properties.rotationDegrees == nil)
     }
@@ -74,6 +89,44 @@ final class MatroskaVideoTrackPropertiesTests {
 
         let audio = try #require(try MatroskaFile(url: mka).audioTrack)
         #expect(audio.codecFourCC == nil)
+    }
+
+    // MARK: - readAnyContainer
+
+    /// The shared entry point every call site uses. Three of them exist across the two products,
+    /// and the one that kept calling plain `read(from:)` is what left TorchTag's rows blank.
+    @Test func readAnyContainerFillsInMatroska() async throws {
+        let result = await VideoTrackReader.readAnyContainer(from: mkv)
+        let videoTrack = try #require(result.videoTrack)
+
+        #expect(videoTrack.width == 160)
+        #expect(videoTrack.codec == "avc1")
+
+        // Still unplayable -- the demuxer supplies properties, not playback, and the row's status
+        // indicator must keep saying so.
+        #expect(result.isPlayable == false)
+
+        // No Matroska equivalent, so not invented.
+        #expect(result.quickTimeUserData == nil)
+    }
+
+    /// A container AVFoundation *can* open must not be diverted — same values as the plain read,
+    /// including the QuickTime user data the Matroska path has no way to produce.
+    @Test func readAnyContainerLeavesAVFoundationFormatsAlone() async throws {
+        let plain = await VideoTrackReader.read(from: mov)
+        let any = await VideoTrackReader.readAnyContainer(from: mov)
+
+        #expect(any.videoTrack == plain.videoTrack)
+        #expect(any.isPlayable == plain.isPlayable)
+        #expect(any.quickTimeUserData != nil)
+        #expect(any.quickTimeUserData == plain.quickTimeUserData)
+    }
+
+    /// Asking about a file that is neither playable video nor Matroska is allowed and answers nil,
+    /// rather than logging a failure for every such file.
+    @Test func readAnyContainerReturnsNilForANonVideoFile() async {
+        let result = await VideoTrackReader.readAnyContainer(from: TestBundleResources.shared.tabla_wav)
+        #expect(result.videoTrack == nil)
     }
 
     /// `DisplayWidth`/`DisplayHeight` are only a resolution when `DisplayUnit` says pixels, and
