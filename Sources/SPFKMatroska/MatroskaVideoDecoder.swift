@@ -138,6 +138,35 @@ public final class MatroskaVideoDecoder {
         return frame.cgImage
     }
 
+    /// Repositions to the keyframe at or before `timestamp` and clears the decoder's state.
+    ///
+    /// - Throws: ``MatroskaError/noSeekIndex(_:)`` when the file carries no index.
+    public func seek(to timestamp: TimeInterval) throws {
+        try reader.seek(to: timestamp, trackNumber: track.number)
+
+        // The session holds reference frames from wherever it was; a new GOP must not be decoded
+        // against them.
+        VTDecompressionSessionFinishDelayedFrames(session)
+        VTDecompressionSessionWaitForAsynchronousFrames(session)
+    }
+
+    /// One picture from `timestamp`, for a still preview.
+    ///
+    /// Seeks first, so this costs an index lookup and one GOP rather than decoding everything up to
+    /// that point. Falls back to the first frame for a file with no index, because a picture from
+    /// the wrong place still beats a black rectangle.
+    public static func cgImage(url: URL, at timestamp: TimeInterval) throws -> CGImage? {
+        let decoder = try MatroskaVideoDecoder(url: url)
+
+        do {
+            try decoder.seek(to: timestamp)
+        } catch MatroskaError.noSeekIndex {
+            // Keep going from the start rather than failing the preview outright.
+        }
+
+        return try decoder.nextImage()?.cgImage
+    }
+
     /// Skips the interleaved audio and subtitle frames the demuxer hands back alongside video.
     private func nextVideoFrame() throws -> MatroskaFrame? {
         while let frame = try reader.nextFrame() {

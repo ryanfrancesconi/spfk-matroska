@@ -36,6 +36,25 @@ public final class MatroskaFrameReader {
         file = MatroskaFile(url: url, description: reader.segmentDescription)
     }
 
+    /// Repositions the walk to the keyframe at or before `timestamp` on `trackNumber`.
+    ///
+    /// A lookup in the file's `Cues` index plus one cluster read, not a scan — which is what makes
+    /// a poster frame from the middle of a feature film affordable.
+    ///
+    /// Frames for *every* track keep arriving afterwards, so a caller wanting one track filters as
+    /// before. The track has to be named because a keyframe of one lands mid-GOP for another.
+    ///
+    /// - Throws: ``MatroskaError/noSeekIndex(_:)`` when the file has no index for that track.
+    public func seek(to timestamp: TimeInterval, trackNumber: Int) throws {
+        let nanoseconds = Int64((timestamp * 1_000_000_000).rounded())
+
+        do {
+            try reader.seek(toTimeNanoseconds: nanoseconds, trackNumber: Int64(trackNumber))
+        } catch {
+            throw MatroskaError.from(error, url: url)
+        }
+    }
+
     /// The next frame, or `nil` at the end of the file.
     ///
     /// - Throws: ``MatroskaError`` if the walk stopped on a malformed cluster rather than reaching

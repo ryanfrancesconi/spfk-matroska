@@ -16,6 +16,9 @@ public enum MatroskaError: Error, Equatable, Sendable {
 
     /// Headers parsed, but the file declares no tracks.
     case noTracks(URL)
+
+    /// The file carries no `Cues` index, so a seek would cost a scan rather than a lookup.
+    case noSeekIndex(URL)
 }
 
 // MARK: - Bridging
@@ -30,6 +33,7 @@ extension MatroskaError {
         case MKVError.unreadableFile.rawValue: .unreadableFile(url)
         case MKVError.notMatroska.rawValue: .notMatroska(url)
         case MKVError.noTracks.rawValue: .noTracks(url)
+        case MKVError.noSeekIndex.rawValue: .noSeekIndex(url)
         default: .malformedSegment(url)
         }
     }
@@ -53,6 +57,9 @@ extension MatroskaError: LocalizedError {
 
         case let .noTracks(url):
             "\(url.lastPathComponent) contains no tracks"
+
+        case let .noSeekIndex(url):
+            "\(url.lastPathComponent) has no seek index"
         }
     }
 }

@@ -35,6 +35,21 @@ NS_ASSUME_NONNULL_BEGIN
 /// The error that stopped the walk, or nil if it ran to a clean end.
 @property (nonatomic, readonly, nullable) NSError *failure;
 
+/// Repositions the walk to the keyframe at or before `timeNanoseconds` on `trackNumber`.
+///
+/// Uses the file's `Cues` index, so the cost is a lookup and one cluster read rather than a scan —
+/// which is the difference between a poster frame being free and it costing an hour of decoding on
+/// a feature film.
+///
+/// Subsequent ``nextFrame`` calls resume from there and still return **every** track's frames, so a
+/// caller that wants only one track filters as it did before. Seeking to a keyframe of one track
+/// lands mid-GOP for another, which is why the track has to be named.
+///
+/// Returns `NO` when the file carries no index, or none for that track.
+- (BOOL)seekToTimeNanoseconds:(long long)timeNanoseconds
+                  trackNumber:(long long)trackNumber
+                        error:(NSError **)error;
+
 @end
 
 NS_ASSUME_NONNULL_END

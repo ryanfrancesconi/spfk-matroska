@@ -3,6 +3,7 @@
 #import "MKVFrameReader.h"
 #import "MKVDescription+Internal.h"
 #import <mkvparser/mkvreader.h>
+#import <common/webmids.h>
 
 @interface MKVFrameReader ()
 @property (nonatomic, readwrite, nullable) NSError *failure;
@@ -132,6 +133,99 @@
             return nullptr;
         }
     }
+}
+
+/// The Cues index, parsing it on demand.
+///
+/// `ParseHeaders` stops at the first cluster and the Cues element is written at the *end* of the
+/// file, so the segment has no index until someone asks for it -- the SeekHead is the only thing
+/// pointing at it, and following that entry is what turns a seek from a scan into a lookup.
+- (nullable const mkvparser::Cues *)loadCues {
+    if (const mkvparser::Cues *cues = _segment->GetCues()) {
+        return cues;
+    }
+
+    const mkvparser::SeekHead *seekHead = _segment->GetSeekHead();
+
+    if (seekHead == nullptr) {
+        return nullptr;
+    }
+
+    for (int index = 0; index < seekHead->GetCount(); index++) {
+        const mkvparser::SeekHead::Entry *entry = seekHead->GetEntry(index);
+
+        if (entry == nullptr || entry->id != libwebm::kMkvCues) {
+            continue;
+        }
+
+        long long position = 0;
+        long length = 0;
+
+        if (_segment->ParseCues(entry->pos, position, length) < 0) {
+            return nullptr;
+        }
+
+        return _segment->GetCues();
+    }
+
+    return nullptr;
+}
+
+- (BOOL)seekToTimeNanoseconds:(long long)timeNanoseconds
+                  trackNumber:(long long)trackNumber
+                        error:(NSError **)error {
+    const mkvparser::Tracks *tracks = _segment->GetTracks();
+    const mkvparser::Track *track = tracks == nullptr ? nullptr : tracks->GetTrackByNumber((long)trackNumber);
+
+    if (track == nullptr) {
+        if (error != nullptr) {
+            *error = MKVMakeError(MKVErrorNoTracks, _url, @"No such track.");
+        }
+        return NO;
+    }
+
+    const mkvparser::Cues *cues = [self loadCues];
+
+    if (cues == nullptr) {
+        if (error != nullptr) {
+            *error = MKVMakeError(MKVErrorNoSeekIndex, _url, @"The file carries no Cues index.");
+        }
+        return NO;
+    }
+
+    // Cue points load lazily; a lookup against a partially loaded index silently finds the wrong
+    // keyframe, so the whole index is read before searching it.
+    while (!cues->DoneParsing()) {
+        cues->LoadCuePoint();
+    }
+
+    const mkvparser::CuePoint *cuePoint = nullptr;
+    const mkvparser::CuePoint::TrackPosition *trackPosition = nullptr;
+
+    if (!cues->Find(timeNanoseconds, track, cuePoint, trackPosition) || cuePoint == nullptr ||
+        trackPosition == nullptr) {
+        if (error != nullptr) {
+            *error = MKVMakeError(MKVErrorNoSeekIndex, _url, @"No cue point for that time.");
+        }
+        return NO;
+    }
+
+    const mkvparser::BlockEntry *entry = cues->GetBlock(cuePoint, trackPosition);
+
+    if (entry == nullptr || entry->EOS()) {
+        if (error != nullptr) {
+            *error = MKVMakeError(MKVErrorMalformedSegment, _url, @"The cue point names no block.");
+        }
+        return NO;
+    }
+
+    _cluster = entry->GetCluster();
+    _blockEntry = entry;
+    _frameIndex = 0;
+    _finished = NO;
+    self.failure = nil;
+
+    return YES;
 }
 
 - (nullable MKVFrame *)nextFrame {

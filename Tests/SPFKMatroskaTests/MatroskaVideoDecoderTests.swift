@@ -148,3 +148,65 @@ final class MatroskaVideoDecoderTests {
         }
     }
 }
+
+// MARK: - Seeking
+
+@Suite(.tags(.file), .serialized)
+final class MatroskaSeekTests {
+    let mkv = TestBundleResources.shared.sample_mkv
+
+    /// A seek must land on a keyframe at or **before** the requested time — never after, or the
+    /// decoder starts mid-GOP with no reference frames and produces garbage.
+    @Test func seekLandsOnTheKeyframeAtOrBeforeTheRequest() throws {
+        let reader = try MatroskaFrameReader(url: mkv)
+        let track = try #require(reader.file.videoTrack)
+
+        try reader.seek(to: 1.5, trackNumber: track.number)
+
+        let frame = try #require(try reader.allFrames(ofTrack: track.number).first)
+
+        #expect(frame.isKeyframe)
+        #expect(frame.timestamp <= 1.5)
+    }
+
+    /// Verified against the Cues index rather than against itself: the fixture keyframes every 15
+    /// frames at 30fps, so seeking past the second one must not come back with the first.
+    @Test func seekingForwardAdvancesPastEarlierKeyframes() throws {
+        let reader = try MatroskaFrameReader(url: mkv)
+        let track = try #require(reader.file.videoTrack)
+
+        let allKeyframes = try reader.allFrames(ofTrack: track.number)
+            .filter(\.isKeyframe)
+            .map(\.timestamp)
+            .sorted()
+
+        #expect(allKeyframes.count == 4)
+
+        let target = try #require(allKeyframes.last)
+
+        let seeking = try MatroskaFrameReader(url: mkv)
+        try seeking.seek(to: target + 0.01, trackNumber: track.number)
+
+        let landed = try #require(try seeking.allFrames(ofTrack: track.number).first)
+        #expect(abs(landed.timestamp - target) < 0.001)
+    }
+
+    /// The point of the whole exercise: a picture from the middle of the file without decoding
+    /// everything before it.
+    @Test func decodesAPictureAfterSeeking() throws {
+        let image = try #require(try MatroskaVideoDecoder.cgImage(url: mkv, at: 1.5))
+
+        #expect(image.width == 160)
+        #expect(image.height == 120)
+    }
+
+    /// A midpoint poster must differ from the opening frame, which is the visible symptom that
+    /// started this: every film thumbnail was black because it was frame zero.
+    @Test func aMidpointPosterDiffersFromTheFirstFrame() throws {
+        let first = try #require(try MatroskaVideoDecoder.firstCGImage(url: mkv))
+        let middle = try #require(try MatroskaVideoDecoder.cgImage(url: mkv, at: 1.0))
+
+        #expect(first.width == middle.width)
+        #expect(first.dataProvider?.data != middle.dataProvider?.data)
+    }
+}

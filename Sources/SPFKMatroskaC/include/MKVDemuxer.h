@@ -17,6 +17,8 @@ typedef NS_ERROR_ENUM(MKVErrorDomain, MKVError){
     MKVErrorMalformedSegment = 3,
     /// Headers parsed, but the file declares no tracks.
     MKVErrorNoTracks = 4,
+    /// No Cues index, so a seek would mean scanning the whole file rather than a lookup.
+    MKVErrorNoSeekIndex = 5,
 };
 
 /// Reads Matroska and WebM containers.
