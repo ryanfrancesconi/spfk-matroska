@@ -313,3 +313,73 @@ struct MatroskaFilmstripTests {
         #expect(try MatroskaVideoDecoder.cgImages(url: mkv, at: []).isEmpty)
     }
 }
+
+/// The filmstrip path: many pictures from one file, which is what a timeline band asks for.
+@Suite(.tags(.file), .serialized)
+struct MatroskaVideoDecoderImagesTests {
+    let mkv = TestBundleResources.shared.sample_mkv
+
+    @Test func returnsAPictureForEachRequestedTimestamp() throws {
+        let duration = try #require(MatroskaFile(url: mkv).duration)
+        try #require(duration > 0)
+
+        // Ends strictly before the duration, so every request is reachable.
+        let timestamps = stride(from: 0.0, to: duration, by: duration / 4).map { $0 }
+        try #require(timestamps.count >= 3)
+
+        let images = try MatroskaVideoDecoder.images(url: mkv, at: timestamps)
+
+        #expect(images.count == timestamps.count, "asked for \(timestamps.count) frames, got \(images.count)")
+
+        for timestamp in timestamps {
+            #expect(images[timestamp] != nil, "no picture at \(timestamp)s")
+        }
+    }
+
+    /// The bound that keeps a feature-length filmstrip from costing gigabytes.
+    @Test func scalesEachPictureWithinTheGivenSize() throws {
+        let band: CGFloat = 44
+
+        let images = try MatroskaVideoDecoder.images(
+            url: mkv,
+            at: [0],
+            maximumSize: CGSize(width: 0, height: band)
+        )
+
+        let image = try #require(images[0])
+
+        #expect(image.height == Int(band), "scaled to \(image.width)x\(image.height)")
+        #expect(image.width > 0)
+    }
+
+    /// The streaming contract: every returned frame is also delivered as it decodes, in order.
+    ///
+    /// This is what lets a filmstrip fill in during the scan instead of appearing at the end, so a
+    /// callback that stopped firing would look like a hang rather than a failure.
+    @Test func deliversEachPictureAsItIsDecoded() throws {
+        let duration = try #require(MatroskaFile(url: mkv).duration)
+
+        let timestamps = stride(from: 0.0, to: duration, by: duration / 4).map { $0 }
+        try #require(timestamps.count >= 3)
+
+        var delivered: [TimeInterval] = []
+
+        let images = try MatroskaVideoDecoder.images(url: mkv, at: timestamps) { timestamp, _ in
+            delivered.append(timestamp)
+        }
+
+        #expect(delivered.count == images.count, "delivered \(delivered.count) of \(images.count) frames")
+        #expect(delivered == delivered.sorted(), "frames arrived out of order: \(delivered)")
+    }
+
+    /// Unsorted input must not lose frames: the walk only moves forward, so the method sorts.
+    @Test func acceptsTimestampsInAnyOrder() throws {
+        let duration = try #require(MatroskaFile(url: mkv).duration)
+
+        let timestamps = [duration / 2, 0, duration / 4]
+
+        let images = try MatroskaVideoDecoder.images(url: mkv, at: timestamps)
+
+        #expect(images.count == timestamps.count)
+    }
+}

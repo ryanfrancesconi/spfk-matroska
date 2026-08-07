@@ -208,6 +208,83 @@ public final class MatroskaVideoDecoder {
         return try decoder.nextImage()?.cgImage
     }
 
+    /// Pictures at each of `timestamps`, for a filmstrip.
+    ///
+    /// The counterpart to `SPFKVideo/VideoFrameExtractor/frames(from:at:maximumSize:)`, which needs
+    /// an asset AVFoundation can open. One decoder is opened for the whole set rather than one per
+    /// timestamp, because opening costs a header parse each time and a filmstrip asks for hundreds.
+    ///
+    /// **Timestamps are sorted ascending and walked in that order**, which is what makes a file with
+    /// no `Cues` work at all: seeking fails there, so the walk simply keeps decoding forward to the
+    /// next target — one pass over the file instead of one scan per frame. An indexed file seeks
+    /// and only decodes the GOP it lands in.
+    ///
+    /// Each picture is scaled on the way out, so a feature-length filmstrip holds hundreds of
+    /// thumbnails rather than hundreds of full-size frames. That is the difference between a few
+    /// megabytes and a few gigabytes.
+    ///
+    /// Synchronous and not cheap. Call it off the main actor.
+    ///
+    /// - Parameter maximumSize: bounds the output, preserving aspect ratio. A zero or negative
+    ///   width or height is treated as unconstrained on that axis, matching
+    ///   `AVAssetImageGenerator.maximumSize`.
+    /// - Parameter onImage: called with each picture as it is decoded, in ascending timestamp order,
+    ///   on whatever thread this runs on. **A filmstrip over a feature-length file takes long enough
+    ///   that a caller drawing only the returned dictionary looks hung** — this exists so the strip
+    ///   can fill in as the scan proceeds, which is a better progress indicator than a bar because
+    ///   it is the actual result appearing.
+    /// - Returns: a picture per timestamp that yielded one. Timestamps past the end are absent
+    ///   rather than an error — a container states a segment length, not a track length.
+    public static func images(
+        url: URL,
+        at timestamps: [TimeInterval],
+        maximumSize: CGSize? = nil,
+        onImage: ((TimeInterval, CGImage) -> Void)? = nil
+    ) throws -> [TimeInterval: CGImage] {
+        guard timestamps.isEmpty == false else { return [:] }
+
+        let decoder = try MatroskaVideoDecoder(url: url)
+
+        var images: [TimeInterval: CGImage] = [:]
+        var canSeek = true
+
+        for timestamp in timestamps.sorted() {
+            if canSeek {
+                do {
+                    try decoder.seek(to: timestamp)
+                } catch MatroskaError.noSeekIndex {
+                    // Asked once. Every subsequent seek would fail the same way, and the walk below
+                    // already reaches an ascending target without one.
+                    canSeek = false
+                }
+            }
+
+            guard let frame = try decoder.frame(atOrAfter: timestamp) else { break }
+            guard let image = frame.cgImage else { continue }
+
+            let scaled = maximumSize.flatMap { image.scaled(within: $0) } ?? image
+
+            images[timestamp] = scaled
+            onImage?(timestamp, scaled)
+        }
+
+        return images
+    }
+
+    /// The first decoded picture whose presentation time reaches `timestamp`.
+    ///
+    /// After a successful seek this is the next picture; without one it decodes forward until the
+    /// target is reached, which is why the caller must ask in ascending order.
+    private func frame(atOrAfter timestamp: TimeInterval) throws -> MatroskaVideoFrame? {
+        while let frame = try nextImage() {
+            if frame.timestamp >= timestamp {
+                return frame
+            }
+        }
+
+        return nil
+    }
+
     /// Skips the interleaved audio and subtitle frames the demuxer hands back alongside video.
     private func nextVideoFrame() throws -> MatroskaFrame? {
         while let frame = try reader.nextFrame() {
@@ -249,5 +326,49 @@ extension MatroskaVideoDecoderError: LocalizedError {
         case let .decodeFailed(url, status):
             "Failed to decode video in \(url.lastPathComponent) (\(status))"
         }
+    }
+}
+
+// MARK: -
+
+extension CGImage {
+    /// A copy scaled to fit inside `size`, preserving aspect ratio and never enlarging.
+    ///
+    /// Local to this package rather than `SPFKUtils.CGImage.scaled(to:)`, which takes an exact size
+    /// and which `spfk-matroska` cannot reach — it depends on `spfk-base` and `spfk-video` only, and
+    /// a dependency edge for one downscale is the more expensive of the two options.
+    ///
+    /// A zero or negative extent leaves that axis unconstrained, matching
+    /// `AVAssetImageGenerator.maximumSize` so a filmstrip built from either source is bounded the
+    /// same way.
+    func scaled(within size: CGSize) -> CGImage? {
+        let widthRatio = size.width > 0 ? size.width / CGFloat(width) : .greatestFiniteMagnitude
+        let heightRatio = size.height > 0 ? size.height / CGFloat(height) : .greatestFiniteMagnitude
+
+        let ratio = min(widthRatio, heightRatio)
+
+        guard ratio < 1 else { return self }
+
+        let scaledWidth = Int((CGFloat(width) * ratio).rounded())
+        let scaledHeight = Int((CGFloat(height) * ratio).rounded())
+
+        guard scaledWidth > 0, scaledHeight > 0, let colorSpace else { return nil }
+
+        guard let context = CGContext(
+            data: nil,
+            width: scaledWidth,
+            height: scaledHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return nil
+        }
+
+        context.interpolationQuality = .high
+        context.draw(self, in: CGRect(x: 0, y: 0, width: scaledWidth, height: scaledHeight))
+
+        return context.makeImage()
     }
 }
