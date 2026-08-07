@@ -346,6 +346,53 @@ static long long MKVCuesOffsetInSeekHead(mkvparser::Segment *segment,
         trackPosition = earliestPosition;
     }
 
+    // No cue point names this track at all, which is the ordinary shape of a file whose Cues index
+    // only the video track. Clusters interleave every track, so any track's cue point lands on a
+    // cluster carrying this track's frames for the same span -- close enough for the caller to walk
+    // the rest. Refusing here instead made every seek a decode from the current position, which on a
+    // feature-length file costs seconds.
+    BOOL usedForeignTrack = NO;
+
+    if (cuePoint == nullptr) {
+        const unsigned long trackCount = tracks->GetTracksCount();
+
+        for (const mkvparser::CuePoint *point = cues->GetFirst(); point != nullptr;
+             point = cues->GetNext(point)) {
+            const mkvparser::CuePoint::TrackPosition *position = nullptr;
+
+            for (unsigned long index = 0; index < trackCount && position == nullptr; ++index) {
+                const mkvparser::Track *candidate = tracks->GetTrackByIndex(index);
+
+                if (candidate != nullptr) {
+                    position = point->Find(candidate);
+                }
+            }
+
+            if (position == nullptr) {
+                continue;
+            }
+
+            if (earliestPoint == nullptr) {
+                earliestPoint = point;
+                earliestPosition = position;
+            }
+
+            if (point->GetTime(_segment) > timeNanoseconds) {
+                break;
+            }
+
+            cuePoint = point;
+            trackPosition = position;
+        }
+
+        if (cuePoint == nullptr) {
+            cuePoint = earliestPoint;
+            trackPosition = earliestPosition;
+        }
+
+        usedForeignTrack = cuePoint != nullptr;
+    }
+
     if (cuePoint == nullptr || trackPosition == nullptr) {
         if (error != nullptr) {
             *error = MKVMakeError(MKVErrorNoSeekIndex, _url, @"No cue point for that time.");
@@ -353,17 +400,48 @@ static long long MKVCuesOffsetInSeekHead(mkvparser::Segment *segment,
         return NO;
     }
 
-    const mkvparser::BlockEntry *entry = cues->GetBlock(cuePoint, trackPosition);
+    if (usedForeignTrack) {
+        // The cue point describes another track's block, so ask it only for the cluster and start
+        // at the beginning of that. `Cues::GetBlock` is not usable here: it matches a block by
+        // timecode *and* track within the cluster, which succeeds or fails depending on how the
+        // cue's own track happens to be laid out -- on a two-hour file four positions in ten came
+        // back empty. Everything in the cluster is at or before the cue point's time, so nothing
+        // this track needs is skipped.
+        const mkvparser::Cluster *cluster = _segment->FindOrPreloadCluster(trackPosition->m_pos);
 
-    if (entry == nullptr || entry->EOS()) {
-        if (error != nullptr) {
-            *error = MKVMakeError(MKVErrorMalformedSegment, _url, @"The cue point names no block.");
+        if (cluster == nullptr || cluster->EOS()) {
+            if (error != nullptr) {
+                *error = MKVMakeError(MKVErrorMalformedSegment, _url, @"The cue point names no cluster.");
+            }
+            return NO;
         }
-        return NO;
+
+        const mkvparser::BlockEntry *first = nullptr;
+
+        if (cluster->GetFirst(first) < 0 || first == nullptr || first->EOS()) {
+            if (error != nullptr) {
+                *error = MKVMakeError(MKVErrorMalformedSegment, _url, @"The cluster carries no blocks.");
+            }
+            return NO;
+        }
+
+        _cluster = cluster;
+        _blockEntry = first;
+
+    } else {
+        const mkvparser::BlockEntry *entry = cues->GetBlock(cuePoint, trackPosition);
+
+        if (entry == nullptr || entry->EOS()) {
+            if (error != nullptr) {
+                *error = MKVMakeError(MKVErrorMalformedSegment, _url, @"The cue point names no block.");
+            }
+            return NO;
+        }
+
+        _cluster = entry->GetCluster();
+        _blockEntry = entry;
     }
 
-    _cluster = entry->GetCluster();
-    _blockEntry = entry;
     _frameIndex = 0;
     _finished = NO;
     self.failure = nil;

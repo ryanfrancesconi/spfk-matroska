@@ -379,3 +379,48 @@ struct MatroskaVideoDecoderImagesTests {
         #expect(images.count == timestamps.count)
     }
 }
+
+/// Which positions the cue index can actually reach, at reader level.
+@Suite(.tags(.file), .serialized, .enabled(if: ProcessInfo.processInfo.environment["SPFK_LONG_MEDIA"] != nil))
+struct MatroskaLongFileReaderSeekTests {
+    @Test func reportsSeekableRange() throws {
+        let path = try #require(ProcessInfo.processInfo.environment["SPFK_LONG_MEDIA"])
+        let url = URL(fileURLWithPath: path)
+
+        let file = try MatroskaFile(url: url)
+        let duration = try #require(file.duration)
+        let audio = try #require(file.audioTrack)
+        let video = file.videoTrack
+
+        print("📏 duration \(Int(duration))s  audio track \(audio.number)  video track \(video?.number ?? -1)")
+
+        for fraction in stride(from: 0.0, through: 0.9, by: 0.1) {
+            let target = duration * fraction
+            let reader = try MatroskaFrameReader(url: url)
+
+            do {
+                try reader.seek(to: target, trackNumber: audio.number)
+
+                var first: MatroskaFrame?
+                var scanned = 0
+
+                while let frame = try reader.nextFrame(), scanned < 200 {
+                    scanned += 1
+                    if frame.trackNumber == audio.number {
+                        first = frame
+                        break
+                    }
+                }
+
+                if let first {
+                    print("✅ \(Int(target))s -> audio at \(String(format: "%.2f", first.timestamp))s after \(scanned) frames")
+                } else {
+                    print("⚠️ \(Int(target))s -> no audio frame in \(scanned) frames")
+                }
+
+            } catch {
+                print("❌ \(Int(target))s -> \(error)")
+            }
+        }
+    }
+}
