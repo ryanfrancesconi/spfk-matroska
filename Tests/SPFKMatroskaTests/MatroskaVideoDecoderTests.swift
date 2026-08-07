@@ -327,7 +327,7 @@ struct MatroskaVideoDecoderImagesTests {
         let timestamps = stride(from: 0.0, to: duration, by: duration / 4).map { $0 }
         try #require(timestamps.count >= 3)
 
-        let images = try MatroskaVideoDecoder.images(url: mkv, at: timestamps)
+        let images = try MatroskaVideoDecoder.cgImages(url: mkv, at: timestamps)
 
         #expect(images.count == timestamps.count, "asked for \(timestamps.count) frames, got \(images.count)")
 
@@ -340,15 +340,11 @@ struct MatroskaVideoDecoderImagesTests {
     @Test func scalesEachPictureWithinTheGivenSize() throws {
         let band: CGFloat = 44
 
-        let images = try MatroskaVideoDecoder.images(
-            url: mkv,
-            at: [0],
-            maximumSize: CGSize(width: 0, height: band)
-        )
+        let images = try MatroskaVideoDecoder.cgImages(url: mkv, at: [0], maximumSize: band)
 
         let image = try #require(images[0])
 
-        #expect(image.height == Int(band), "scaled to \(image.width)x\(image.height)")
+        #expect(max(image.width, image.height) == Int(band), "scaled to \(image.width)x\(image.height)")
         #expect(image.width > 0)
     }
 
@@ -364,7 +360,7 @@ struct MatroskaVideoDecoderImagesTests {
 
         var delivered: [TimeInterval] = []
 
-        let images = try MatroskaVideoDecoder.images(url: mkv, at: timestamps) { timestamp, _ in
+        let images = try MatroskaVideoDecoder.cgImages(url: mkv, at: timestamps) { timestamp, _ in
             delivered.append(timestamp)
         }
 
@@ -378,7 +374,7 @@ struct MatroskaVideoDecoderImagesTests {
 
         let timestamps = [duration / 2, 0, duration / 4]
 
-        let images = try MatroskaVideoDecoder.images(url: mkv, at: timestamps)
+        let images = try MatroskaVideoDecoder.cgImages(url: mkv, at: timestamps)
 
         #expect(images.count == timestamps.count)
     }
