@@ -17,18 +17,14 @@ public extension MatroskaVideoDecoder {
     /// comes back evenly spaced and a filmstrip stays visually uniform. A timestamp that yields no
     /// picture is absent rather than zero — callers already draw a gap for a missing frame.
     ///
-    /// A file with **no index still fills the whole strip**, by decoding on to each target rather
-    /// than giving up: seeking is what is unavailable, not reading. That is one pass over the file
-    /// for the set instead of one scan per frame, and it is why the ascending order above is a
-    /// requirement rather than an optimization. An earlier version stopped at the first such
-    /// failure and left the rest of the strip blank — which is most of the `.mkv` files that turn up.
+    /// A file with no index still fills the strip, by decoding on to each target: seeking is what
+    /// is unavailable, not reading. This is what makes the ascending order a requirement.
     ///
     /// - Parameter maximumSize: longest-edge bound, preserving aspect. `nil` leaves frames at their
     ///   native size, which for a 4K film is not what a filmstrip wants.
     /// - Parameter onImage: called with each picture as it is decoded, in ascending order, on
-    ///   whatever thread this runs on. **A feature-length file takes long enough that a caller
-    ///   drawing only the returned dictionary looks hung** — this lets the strip fill in as the scan
-    ///   proceeds, which beats a progress bar because it is the actual result appearing.
+    ///   whatever thread this runs on. Lets a caller draw a filmstrip as it fills rather than after
+    ///   the whole scan.
     static func cgImages(
         url: URL,
         at timestamps: [TimeInterval],
@@ -89,11 +85,8 @@ public extension VideoFrameExtractor {
     ///
     /// - Returns: images keyed by requested timestamp. Empty when nothing can read the file, which
     ///   callers already treat as "draw the strip blank".
-    /// - Parameter onImage: called with each picture as it is decoded, for a caller that wants to
-    ///   draw the strip as it fills. **Only the demuxer path reports incrementally** —
-    ///   AVFoundation's generator returns the set at once — so a caller must still draw the returned
-    ///   dictionary rather than relying on this alone. That asymmetry is acceptable because the
-    ///   demuxer path is the slow one: it walks the file, where AVFoundation seeks.
+    /// - Parameter onImage: called with each picture as it is decoded. **Only the demuxer path
+    ///   reports incrementally**, so a caller must still draw the returned dictionary.
     static func framesForAnyContainer(
         from url: URL,
         at timestamps: [TimeInterval],

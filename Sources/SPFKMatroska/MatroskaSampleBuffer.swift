@@ -38,6 +38,23 @@ public extension MatroskaTrack {
         }
     }
 
+    /// Whether this package can build a decoder for the track's codec.
+    ///
+    /// Header-level: no packet is decoded and no session is created, so it is cheap enough for a
+    /// parse. Optimistic only about a codec the system claims and then fails to instantiate.
+    var isDecodable: Bool {
+        switch kind {
+        case .audio:
+            MatroskaAudioCodec(rawValue: codecID) != nil
+
+        case .video:
+            codecFourCC.flatMap { MatroskaTrack.codecType(for: $0) } != nil
+
+        case .subtitle, .metadata, .other:
+            false
+        }
+    }
+
     /// Builds the `CMVideoFormatDescription` a decoder needs to make sense of this track's frames.
     ///
     /// `CodecPrivate` goes in verbatim as a sample-description extension atom — Matroska stores
