@@ -48,6 +48,13 @@ public final class MatroskaSampleBufferReader: @unchecked Sendable {
     public let audioTrack: MatroskaTrack?
     public let audioFormatDescription: CMAudioFormatDescription?
 
+    /// Every audio track in the file that this package can describe, in stored order.
+    ///
+    /// A dual-audio film states two — an original and a dub — and which one the muxer wrote first
+    /// is not a preference. Listed so a caller can offer the choice; pass a track number to
+    /// ``init(url:audioTrackNumber:)`` to take it.
+    public let availableAudioTracks: [MatroskaTrack]
+
     private let reader: MatroskaFrameReader
 
     /// The reader is handed to a feed queue and driven from there, off whatever actor built it, so
@@ -58,7 +65,10 @@ public final class MatroskaSampleBufferReader: @unchecked Sendable {
     ///
     /// - Throws: ``MatroskaError``, ``MatroskaSampleBufferError``,
     ///   ``MatroskaVideoDecoderError/noVideoTrack(_:)``.
-    public init(url: URL) throws {
+    /// - Parameter audioTrackNumber: which audio track to read. Defaults to the file's first, which
+    ///   is what a muxer's ordering happens to give and not a choice. Ignored when the file has no
+    ///   such track.
+    public init(url: URL, audioTrackNumber: Int64? = nil) throws {
         self.url = url
 
         reader = try MatroskaFrameReader(url: url)
@@ -70,7 +80,18 @@ public final class MatroskaSampleBufferReader: @unchecked Sendable {
         self.videoTrack = videoTrack
         videoFormatDescription = try videoTrack.makeFormatDescription()
 
-        if let track = reader.file.audioTrack,
+        let describableAudioTracks = reader.file.tracks.filter {
+            if case .audio = $0.kind { return (try? $0.makeAudioFormatDescription()) != nil }
+            return false
+        }
+
+        availableAudioTracks = describableAudioTracks
+
+        let requested = audioTrackNumber.flatMap { number in
+            describableAudioTracks.first { $0.number == number }
+        }
+
+        if let track = requested ?? describableAudioTracks.first,
            let description = try? track.makeAudioFormatDescription() {
             audioTrack = track
             audioFormatDescription = description

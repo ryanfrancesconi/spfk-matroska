@@ -267,3 +267,49 @@ final class MatroskaSeekTests {
         #expect(abs(frame.timestamp - 1.048) < 0.001)
     }
 }
+
+// MARK: - Filmstrip
+
+@Suite(.tags(.file), .serialized)
+struct MatroskaFilmstripTests {
+    private let mkv = TestBundleResources.shared.sample_mkv
+
+    /// The filmstrip's whole point: several stills from one open of the file, keyed by the time
+    /// that was asked for so an evenly spaced request draws evenly spaced.
+    @Test func extractsAFrameForEachRequestedTimestamp() throws {
+        let timestamps: [TimeInterval] = [0.1, 0.6, 1.1, 1.6]
+
+        let images = try MatroskaVideoDecoder.cgImages(url: mkv, at: timestamps)
+
+        #expect(images.count == timestamps.count)
+        for timestamp in timestamps {
+            #expect(images[timestamp] != nil)
+        }
+    }
+
+    /// Different points in the file must give different pictures — the failure this guards is a
+    /// strip of one frame repeated, which a count check alone would pass.
+    @Test func framesAtDifferentTimesDiffer() throws {
+        let images = try MatroskaVideoDecoder.cgImages(url: mkv, at: [0.1, 1.6])
+
+        let first = try #require(images[0.1]?.dataProvider?.data)
+        let last = try #require(images[1.6]?.dataProvider?.data)
+
+        #expect(first != last)
+    }
+
+    /// A filmstrip tile is small; a native-resolution frame would be held per tile.
+    @Test func framesAreBoundedByTheRequestedSize() throws {
+        let images = try MatroskaVideoDecoder.cgImages(url: mkv, at: [0.5], maximumSize: 40)
+        let image = try #require(images[0.5])
+
+        #expect(max(image.width, image.height) <= 40)
+        // 160x120 scaled to a 40pt longest edge keeps 4:3.
+        #expect(image.width == 40)
+        #expect(image.height == 30)
+    }
+
+    @Test func noTimestampsIsNotAnError() throws {
+        #expect(try MatroskaVideoDecoder.cgImages(url: mkv, at: []).isEmpty)
+    }
+}
