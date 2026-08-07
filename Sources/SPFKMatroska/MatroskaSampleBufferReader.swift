@@ -6,10 +6,8 @@ import SPFKBase
 
 /// Sample buffers in transit from the thread that read them to the one that will enqueue them.
 ///
-/// **`CMSampleBuffer` is not `Sendable` on macOS**, so a batch cannot cross an isolation boundary
-/// without this. The unchecked conformance is a *transfer* rather than a claim of thread safety:
-/// ``MatroskaSampleBufferReader`` keeps no reference to a buffer once it has handed one back, so
-/// exactly one side holds each buffer at any moment.
+/// `CMSampleBuffer` is not `Sendable` on macOS. The unchecked conformance is a transfer, not a
+/// claim of thread safety: the reader keeps no reference once it has handed a buffer back.
 public struct MatroskaSampleBatch: @unchecked Sendable {
     public let video: [CMSampleBuffer]
     public let audio: [CMSampleBuffer]
@@ -22,52 +20,38 @@ public struct MatroskaSampleBatch: @unchecked Sendable {
 
 /// A file's video and audio tracks as `CMSampleBuffer`s, in the order they are stored.
 ///
-/// **Stored order is decode order, and that is the order to enqueue in** — a renderer schedules by
-/// presentation timestamp itself, so nothing here reorders anything. Worth stating because the
-/// video timestamps deliberately do *not* ascend for a stream with B-frames, which looks like a bug
-/// until you know it is the input a display layer wants.
+/// Stored order is decode order and is what a renderer wants, so nothing here reorders. Video
+/// timestamps therefore do not ascend for a stream with B-frames.
 ///
-/// **Both tracks come out of one walk.** The muxer already interleaved them — audio and video for
-/// the same instant are adjacent — so reading them together is what keeps a player from seeking,
-/// and a second reader over the same file would mean a second file handle and two positions to keep
-/// in step.
-///
-/// Sequential and lazy: clusters are parsed as the walk reaches them, so a feature-length file
-/// costs the part of it that has been played rather than all of it.
+/// Both tracks come out of one walk, because the muxer already interleaved them — a second reader
+/// would mean a second file handle and two positions to keep in step. Clusters are parsed as the
+/// walk reaches them.
 public final class MatroskaSampleBufferReader: @unchecked Sendable {
     public let url: URL
 
     public let videoTrack: MatroskaTrack
     public let videoFormatDescription: CMVideoFormatDescription
 
-    /// The audio track, when the file has one this package can describe.
-    ///
-    /// **Nil is not a failure.** A file can legitimately have no audio, and a codec macOS cannot
-    /// decode should still let the picture play — so an undescribable audio track is dropped here
-    /// rather than failing the whole open.
+    /// `nil` when the file has no audio, or none this package can describe — neither is a failure,
+    /// and the picture still plays.
     public let audioTrack: MatroskaTrack?
     public let audioFormatDescription: CMAudioFormatDescription?
 
-    /// Every audio track in the file that this package can describe, in stored order.
-    ///
-    /// A dual-audio film states two — an original and a dub — and which one the muxer wrote first
-    /// is not a preference. Listed so a caller can offer the choice; pass a track number to
-    /// ``init(url:audioTrackNumber:)`` to take it.
+    /// Every describable audio track, in stored order. A dual-audio film states two and the
+    /// muxer's order is not a preference, so a caller offers the choice.
     public let availableAudioTracks: [MatroskaTrack]
 
     private let reader: MatroskaFrameReader
 
-    /// The reader is handed to a feed queue and driven from there, off whatever actor built it, so
-    /// its own access is serialized here rather than by an isolation the type cannot express.
+    /// Driven from a feed queue rather than the actor that built it, so access is serialized here.
     private let lock = NSLock()
 
     /// Opens `url` and prepares its first video track, and its first audio track if it has one.
     ///
     /// - Throws: ``MatroskaError``, ``MatroskaSampleBufferError``,
     ///   ``MatroskaVideoDecoderError/noVideoTrack(_:)``.
-    /// - Parameter audioTrackNumber: which audio track to read. Defaults to the file's first, which
-    ///   is what a muxer's ordering happens to give and not a choice. Ignored when the file has no
-    ///   such track.
+    /// - Parameter audioTrackNumber: which audio track to read. Defaults to the first stored, which
+    ///   is the muxer's ordering rather than a choice.
     public init(url: URL, audioTrackNumber: Int64? = nil) throws {
         self.url = url
 
@@ -112,13 +96,8 @@ public final class MatroskaSampleBufferReader: @unchecked Sendable {
 
     /// Up to `count` frames from the file, split by track.
     ///
-    /// `count` is frames read, not frames returned per track — the walk covers the file once and
-    /// the interleave decides the split, which is what keeps the two tracks aligned. A caller feeds
-    /// whichever renderer wants more and lets the other's buffer absorb the difference.
-    ///
-    /// Frames from tracks that are neither the video nor the described audio track — subtitles, a
-    /// second audio track — are skipped and still count against `count`, so a file full of them
-    /// cannot spin.
+    /// `count` is frames read, not returned per track: the interleave decides the split. Frames
+    /// from other tracks are skipped and still count, so a file full of them cannot spin.
     ///
     /// - Throws: ``MatroskaError``, ``MatroskaSampleBufferError``.
     public func next(upTo count: Int) throws -> MatroskaSampleBatch {

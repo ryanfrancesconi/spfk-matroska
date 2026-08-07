@@ -4,19 +4,15 @@ import Foundation
 import SPFKBase
 import SPFKVideo
 
-/// Bridges a demuxed Matroska track into `spfk-video`'s shared shape, so a container AVFoundation
-/// cannot open still reports resolution and frame rate through the same type as everything else.
+/// Bridges a demuxed track into `spfk-video`'s shared shape.
 ///
-/// The dependency runs this way deliberately — `spfk-video` is a pure-Swift leaf with many
-/// dependents, and having it reach for the demuxer would make all of them build C++ for a feature
-/// one of them uses.
+/// The dependency runs this way because `spfk-video` is a pure-Swift leaf: reaching for the demuxer
+/// there would make every dependent build C++.
 extension MatroskaTrack {
-    /// The four-character code CoreMedia uses for this track's codec, mapped from the Matroska
-    /// `CodecID`. `nil` for a codec with no CoreMedia equivalent.
+    /// CoreMedia's four-character code for this track's codec, or `nil` for one with no equivalent.
     ///
-    /// Matched to `VideoTrackReader`'s `codec`, which is a `CMFormatDescription` media subtype, so
-    /// the same stream reports the same string whichever container carries it. Every value here is
-    /// read from the `kCMVideoCodecType_*` constants rather than transcribed from a spec.
+    /// Matches `VideoTrackReader`'s `codec`, so the same stream reports the same string whichever
+    /// container carries it. Values are read from `kCMVideoCodecType_*`, not transcribed.
     public var codecFourCC: String? {
         switch codecID {
         case "V_MPEG4/ISO/AVC": "avc1"
@@ -30,11 +26,8 @@ extension MatroskaTrack {
 
     /// Video-technical properties for a video track, or `nil` for any other kind.
     ///
-    /// `duration` is left unset here and filled by ``MatroskaFile/videoTrackProperties``, which is
-    /// the level that knows it — Matroska states duration on the segment, not the track.
-    ///
-    /// `preciseFrameRate` stays `nil`: resolving a rate against `swift-timecode`'s standard-rate
-    /// table needs the exact rational frame duration, which means walking clusters.
+    /// `duration` is filled by ``MatroskaFile/videoTrackProperties``: Matroska states it on the
+    /// segment. `preciseFrameRate` stays `nil` — resolving one means walking clusters.
     public var videoTrackProperties: VideoTrackProperties? {
         guard case let .video(parameters) = kind else {
             return nil

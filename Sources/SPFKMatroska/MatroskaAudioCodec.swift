@@ -5,12 +5,9 @@ import Foundation
 
 /// A Matroska audio `CodecID` macOS has a decoder for.
 ///
-/// Deliberately a small set. Matroska admits codecs macOS cannot decode (DTS and TrueHD among
-/// them), and a caller needs "cannot decode this" to be an answer rather than silence.
-///
-/// Lives here rather than beside either consumer because there are now two — the PCM decoder in
-/// `spfk-audio-conversion` and the sample-buffer path in this package — and a codec table with two
-/// copies is a codec table that drifts.
+/// Deliberately small: Matroska admits codecs macOS cannot decode, DTS and TrueHD among them, and
+/// a caller needs that to be an answer rather than silence. Shared by both consumers, since a codec
+/// table with two copies drifts.
 public enum MatroskaAudioCodec: String, Sendable, CaseIterable {
     case aac = "A_AAC"
     case mp3 = "A_MPEG/L3"
