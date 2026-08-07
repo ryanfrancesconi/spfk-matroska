@@ -169,8 +169,16 @@ public extension MatroskaFrame {
     /// Takes a plain `CMFormatDescription` rather than the video-specific spelling because audio
     /// frames go through the same packaging — one Matroska frame is one packet either way.
     ///
+    /// - Parameter timing: overrides the container's own timing. Audio supplies this: Matroska
+    ///   quantizes block timestamps to the segment's `TimecodeScale`, usually a millisecond, which
+    ///   no compressed audio packet length divides evenly — so the container's times drift against
+    ///   the true packet grid and snap back at each block, which is audible.
+    ///
     /// - Throws: ``MatroskaSampleBufferError``.
-    func makeSampleBuffer(formatDescription: CMFormatDescription) throws -> CMSampleBuffer {
+    func makeSampleBuffer(
+        formatDescription: CMFormatDescription,
+        timing: CMSampleTimingInfo? = nil
+    ) throws -> CMSampleBuffer {
         var blockBuffer: CMBlockBuffer?
 
         var status = CMBlockBufferCreateWithMemoryBlock(
@@ -206,7 +214,7 @@ public extension MatroskaFrame {
 
         // Nanosecond timescale: Matroska's own timestamps are nanoseconds once scaled, so this
         // round-trips them exactly rather than quantizing to a frame rate the file never stated.
-        var timing = CMSampleTimingInfo(
+        var timing = timing ?? CMSampleTimingInfo(
             duration: duration.map { CMTime(seconds: $0, preferredTimescale: 1_000_000_000) } ?? .invalid,
             presentationTimeStamp: CMTime(seconds: timestamp, preferredTimescale: 1_000_000_000),
             decodeTimeStamp: .invalid

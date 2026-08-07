@@ -1,6 +1,5 @@
 // Copyright Ryan Francesconi. All Rights Reserved.
 
-import AudioToolbox
 import CoreMedia
 import Foundation
 import SPFKTesting
@@ -97,6 +96,26 @@ struct MatroskaSampleBufferReaderTests {
 
         let duplicates = zip(timestamps, timestamps.dropFirst()).filter { $0 >= $1 }
         #expect(duplicates.isEmpty)
+    }
+
+    /// Audio packets sit on the codec's own grid, not the container's.
+    ///
+    /// Matroska quantizes block timestamps to `TimecodeScale` — a millisecond — and no compressed
+    /// packet length divides that evenly, so reading times straight out of the container gives a
+    /// sawtooth: an AAC packet is 23.22 ms at 44.1 kHz, stored as alternating 23 and 24. Measured
+    /// on two real films, the spacing is now exact to the sample across 400+ packets where it
+    /// previously deviated by up to half a millisecond every packet.
+    @Test func audioPacketsAreSpacedOnTheCodecGrid() throws {
+        let timestamps = try readAll(url: mkv).audio.map(\.presentationTimeStamp)
+
+        #expect(timestamps.count > 8)
+
+        // 1024 frames per AAC packet at the fixture's 44100 Hz.
+        let expected = 1024.0 / 44100.0
+        let deltas = zip(timestamps, timestamps.dropFirst()).map { ($1 - $0).seconds }
+
+        let offGrid = deltas.filter { abs($0 - expected) > 0.000_001 }
+        #expect(offGrid.isEmpty)
     }
 
     // MARK: - Format descriptions

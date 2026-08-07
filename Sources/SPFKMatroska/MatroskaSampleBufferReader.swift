@@ -74,9 +74,18 @@ public final class MatroskaSampleBufferReader: @unchecked Sendable {
            let description = try? track.makeAudioFormatDescription() {
             audioTrack = track
             audioFormatDescription = description
+
+            if case let .audio(parameters) = track.kind,
+               let codec = MatroskaAudioCodec(rawValue: track.codecID),
+               codec.framesPerPacket > 0, parameters.sampleRate > 0 {
+                audioPacketGrid = (Int64(codec.framesPerPacket), Int32(parameters.sampleRate))
+            } else {
+                audioPacketGrid = nil
+            }
         } else {
             audioTrack = nil
             audioFormatDescription = nil
+            audioPacketGrid = nil
         }
     }
 
@@ -113,11 +122,69 @@ public final class MatroskaSampleBufferReader: @unchecked Sendable {
 
             } else if let audioTrack, let audioFormatDescription,
                       frame.trackNumber == audioTrack.number {
-                audio.append(try frame.makeSampleBuffer(formatDescription: audioFormatDescription))
+                audio.append(try frame.makeSampleBuffer(
+                    formatDescription: audioFormatDescription,
+                    timing: audioTiming(for: frame)
+                ))
             }
         }
 
         return MatroskaSampleBatch(video: video, audio: audio, isEndOfFile: false)
+    }
+
+    // MARK: - Audio timing
+
+    /// Packet grid the audio is placed on: how many frames each packet decodes to, and at what
+    /// rate. `nil` for a codec whose packets are not a fixed length, which then keeps the
+    /// container's own timing.
+    private let audioPacketGrid: (framesPerPacket: Int64, sampleRate: Int32)?
+
+    /// Where the current run of audio started, and how many frames into it we are.
+    private var audioAnchor: CMTime?
+    private var audioFrameOffset: Int64 = 0
+
+    /// Timing for an audio packet, counted from the start of the run rather than read from the
+    /// container.
+    ///
+    /// **Matroska quantizes block timestamps to the segment's `TimecodeScale`** — a millisecond in
+    /// every file seen so far — and no compressed audio packet length divides that evenly. An AAC
+    /// packet is 21.333 ms, so the stored times drift against the true grid and snap back at each
+    /// block boundary; with lacing that is a discontinuity several times a second, and it is
+    /// audible. Counting frames instead puts every packet exactly where it belongs.
+    ///
+    /// A jump larger than half a second is treated as a real discontinuity — a gap in the file, or
+    /// a seek — and re-anchors rather than being smoothed away.
+    private func audioTiming(for frame: MatroskaFrame) -> CMSampleTimingInfo? {
+        guard let grid = audioPacketGrid else { return nil }
+
+        let containerTime = CMTime(seconds: frame.timestamp, preferredTimescale: grid.sampleRate)
+
+        let anchor: CMTime
+
+        if let existing = audioAnchor {
+            let expected = existing + CMTime(value: audioFrameOffset, timescale: grid.sampleRate)
+
+            if abs((containerTime - expected).seconds) > 0.5 {
+                audioAnchor = containerTime
+                audioFrameOffset = 0
+                anchor = containerTime
+            } else {
+                anchor = existing
+            }
+        } else {
+            audioAnchor = containerTime
+            audioFrameOffset = 0
+            anchor = containerTime
+        }
+
+        let presentationTime = anchor + CMTime(value: audioFrameOffset, timescale: grid.sampleRate)
+        audioFrameOffset += grid.framesPerPacket
+
+        return CMSampleTimingInfo(
+            duration: CMTime(value: grid.framesPerPacket, timescale: grid.sampleRate),
+            presentationTimeStamp: presentationTime,
+            decodeTimeStamp: .invalid
+        )
     }
 
     /// Repositions the walk to the keyframe at or before `timestamp` on the video track.
@@ -131,6 +198,10 @@ public final class MatroskaSampleBufferReader: @unchecked Sendable {
         defer { lock.unlock() }
 
         try reader.seek(to: timestamp, trackNumber: videoTrack.number)
+
+        // The run restarts wherever the seek landed, so the frame count cannot carry across it.
+        audioAnchor = nil
+        audioFrameOffset = 0
     }
 
     /// The segment's duration, when it states one.
