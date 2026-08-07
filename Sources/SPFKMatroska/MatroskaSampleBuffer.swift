@@ -13,6 +13,10 @@ public enum MatroskaSampleBufferError: Error, Equatable, Sendable {
     /// how to describe.
     case unsupportedCodec(String)
 
+    /// A codec this package describes, in a configuration Core Audio cannot be told about — a FLAC
+    /// bit depth with no source-depth flag, or a PCM track stating no `BitDepth`.
+    case unsupportedAudioConfiguration(codecID: String, detail: String)
+
     /// The track is not video, or states no pixel dimensions.
     case missingVideoParameters
 
@@ -45,7 +49,9 @@ public extension MatroskaTrack {
     var isDecodable: Bool {
         switch kind {
         case .audio:
-            MatroskaAudioCodec(rawValue: codecID) != nil
+            // Asked of the stream description rather than of the codec table, so a codec in a
+            // configuration Core Audio cannot be told about answers no.
+            (try? makeAudioStreamBasicDescription()) != nil
 
         case .video:
             codecFourCC.flatMap { MatroskaTrack.codecType(for: $0) } != nil
@@ -106,31 +112,17 @@ public extension MatroskaTrack {
 
     /// Builds the `CMAudioFormatDescription` a renderer needs to decode this track's packets.
     ///
-    /// `CodecPrivate` becomes the magic cookie for the codecs that need one — for AAC that blob
+    /// `CodecPrivate` becomes the magic cookie for the codecs that take one — for AAC that blob
     /// *is* the AudioSpecificConfig, the same "stored verbatim" property `avcC` has on the video
     /// side. See ``MatroskaAudioCodec/usesCodecPrivateAsMagicCookie``.
     ///
     /// - Throws: ``MatroskaSampleBufferError``.
     func makeAudioFormatDescription() throws -> CMAudioFormatDescription {
-        guard case let .audio(parameters) = kind, parameters.sampleRate > 0 else {
-            throw MatroskaSampleBufferError.missingAudioParameters
-        }
-
         guard let codec = MatroskaAudioCodec(rawValue: codecID) else {
             throw MatroskaSampleBufferError.unsupportedCodec(codecID)
         }
 
-        var description = AudioStreamBasicDescription(
-            mSampleRate: parameters.sampleRate,
-            mFormatID: codec.formatID,
-            mFormatFlags: 0,
-            mBytesPerPacket: 0,
-            mFramesPerPacket: codec.framesPerPacket,
-            mBytesPerFrame: 0,
-            mChannelsPerFrame: UInt32(parameters.channelCount),
-            mBitsPerChannel: 0,
-            mReserved: 0
-        )
+        var description = try makeAudioStreamBasicDescription()
 
         let cookie = codec.usesCodecPrivateAsMagicCookie ? codecPrivate : nil
 

@@ -14,6 +14,8 @@ public enum MatroskaAudioCodec: String, Sendable, CaseIterable {
     case ac3 = "A_AC3"
     case flac = "A_FLAC"
     case pcmIntegerLittleEndian = "A_PCM/INT/LIT"
+    case pcmIntegerBigEndian = "A_PCM/INT/BIG"
+    case pcmFloat = "A_PCM/FLOAT/IEEE"
 
     public var formatID: AudioFormatID {
         switch self {
@@ -21,33 +23,55 @@ public enum MatroskaAudioCodec: String, Sendable, CaseIterable {
         case .mp3: kAudioFormatMPEGLayer3
         case .ac3: kAudioFormatAC3
         case .flac: kAudioFormatFLAC
-        case .pcmIntegerLittleEndian: kAudioFormatLinearPCM
+        case .pcmIntegerLittleEndian, .pcmIntegerBigEndian, .pcmFloat: kAudioFormatLinearPCM
         }
     }
 
-    /// Frames per compressed packet, which a decoder needs up front because a compressed format
-    /// cannot state bytes-per-frame.
+    /// Frames per compressed packet where the codec fixes it, and zero where it does not.
     ///
-    /// Zero for the formats that state it themselves. AAC is the LC figure; a HE-AAC stream doubles
-    /// it through SBR, which the magic cookie describes rather than this.
+    /// AAC is the LC figure; a HE-AAC stream doubles it through SBR, which the magic cookie
+    /// describes rather than this. **FLAC is zero because its figure belongs to the file rather than
+    /// to the codec** — ``MatroskaTrack/audioFramesPerPacket`` reads it from STREAMINFO.
     public var framesPerPacket: UInt32 {
         switch self {
         case .aac: 1024
         case .mp3: 1152
         case .ac3: 1536
-        case .flac, .pcmIntegerLittleEndian: 0
+        case .flac, .pcmIntegerLittleEndian, .pcmIntegerBigEndian, .pcmFloat: 0
         }
     }
 
-    /// Whether the decoder needs this track's `CodecPrivate` as a magic cookie.
+    /// How a PCM track's samples are laid out, or `nil` for a compressed codec.
     ///
-    /// For AAC that blob *is* the AudioSpecificConfig Core Audio wants, and for FLAC the STREAMINFO
-    /// block — the same "stored verbatim, no conversion" property the video side relies on for
-    /// `avcC`. MP3 and AC-3 describe themselves in every frame header and carry none.
+    /// Signedness is not here because it follows the bit depth rather than the CodecID: Matroska
+    /// inherits WAV's rule that 8-bit integer samples are unsigned and wider ones signed.
+    public var pcmSampleFormat: MatroskaPCMSampleFormat? {
+        switch self {
+        case .pcmIntegerLittleEndian: .integer(isBigEndian: false)
+        case .pcmIntegerBigEndian: .integer(isBigEndian: true)
+        case .pcmFloat: .float
+        case .aac, .mp3, .ac3, .flac: nil
+        }
+    }
+
+    /// Whether the decoder takes this track's `CodecPrivate` as a magic cookie.
+    ///
+    /// For AAC that blob *is* the AudioSpecificConfig Core Audio wants, the same "stored verbatim"
+    /// property `avcC` has on the video side. MP3, AC-3 and PCM carry none. FLAC's STREAMINFO is
+    /// accepted but not needed: what a FLAC track decodes on is the source-depth flag and packet
+    /// length in ``MatroskaTrack/makeAudioStreamBasicDescription()``, not this.
     public var usesCodecPrivateAsMagicCookie: Bool {
         switch self {
         case .aac, .flac: true
-        case .mp3, .ac3, .pcmIntegerLittleEndian: false
+        case .mp3, .ac3, .pcmIntegerLittleEndian, .pcmIntegerBigEndian, .pcmFloat: false
         }
     }
+}
+
+/// How a Matroska PCM track's samples are stored.
+public enum MatroskaPCMSampleFormat: Hashable, Sendable {
+    case integer(isBigEndian: Bool)
+
+    /// IEEE 754, little endian — the only byte order Matroska defines for float PCM.
+    case float
 }

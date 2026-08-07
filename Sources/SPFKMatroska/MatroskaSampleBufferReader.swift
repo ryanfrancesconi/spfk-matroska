@@ -81,9 +81,9 @@ public final class MatroskaSampleBufferReader: @unchecked Sendable {
             audioFormatDescription = description
 
             if case let .audio(parameters) = track.kind,
-               let codec = MatroskaAudioCodec(rawValue: track.codecID),
-               codec.framesPerPacket > 0, parameters.sampleRate > 0 {
-                audioPacketGrid = (Int64(codec.framesPerPacket), Int32(parameters.sampleRate))
+               let framesPerPacket = track.audioFramesPerPacket,
+               parameters.sampleRate > 0 {
+                audioPacketGrid = (Int64(framesPerPacket), Int32(parameters.sampleRate))
             } else {
                 audioPacketGrid = nil
             }
