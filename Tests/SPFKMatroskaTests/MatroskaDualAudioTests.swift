@@ -163,6 +163,29 @@ final class MatroskaDualAudioTests {
         #expect(file.audioTrackDescriptions.map(\.language) == ["eng", "jpn"])
     }
 
+    // MARK: - Container-agnostic listing
+
+    /// The route a file description uses, so a `.mkv` lists its tracks as readily as an `.mp4`.
+    /// AVFoundation cannot open this container at all, so its answer is empty and the demuxer's
+    /// stands.
+    @Test func listsMatroskaTracksThroughTheSharedEntryPoint() async throws {
+        let tracks = await AudioTrackReader.readAnyContainer(from: url)
+
+        #expect(tracks.count == 2)
+        #expect(tracks.map(\.language) == ["eng", "jpn"])
+    }
+
+    /// A container AVFoundation *can* read is described by that path rather than falling through,
+    /// so one file is never described two ways.
+    @Test func prefersTheAVFoundationAnswerWhenThereIsOne() async throws {
+        let tracks = await AudioTrackReader.readAnyContainer(
+            from: TestBundleResources.shared.sample_dualaudio_mov
+        )
+
+        #expect(tracks.count == 2)
+        #expect(tracks.allSatisfy { $0.codec == "aac" })
+    }
+
     /// The video and subtitle tracks are not offered as audio, which a `compactMap` over every
     /// track would do if it keyed on anything but `kind`.
     @Test func describesOnlyTheAudioTracks() throws {
