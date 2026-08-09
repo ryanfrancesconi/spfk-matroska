@@ -271,6 +271,7 @@ private extension MatroskaTrack {
     static func stub(codecID: String, bitDepth: Int?, codecPrivate: Data? = nil) -> MatroskaTrack {
         MatroskaTrack(
             number: 1,
+            uid: 1,
             kind: .audio(AudioParameters(sampleRate: 48000, channelCount: 2, bitDepth: bitDepth)),
             codecID: codecID,
             codecName: nil,

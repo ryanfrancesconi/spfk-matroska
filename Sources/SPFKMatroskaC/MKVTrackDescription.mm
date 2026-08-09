@@ -18,6 +18,7 @@ NSString *_Nullable MKVStringOrNil(const char *_Nullable value) {
     }
 
     _number = track->GetNumber();
+    _uid = track->GetUid();
     _type = (MKVTrackType)track->GetType();
     _codecID = MKVStringOrNil(track->GetCodecId());
     _codecName = MKVStringOrNil(track->GetCodecNameAsUTF8());

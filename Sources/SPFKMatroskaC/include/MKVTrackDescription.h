@@ -22,6 +22,11 @@ typedef NS_ENUM(NSInteger, MKVTrackType) {
 @interface MKVTrackDescription : NSObject
 
 @property(nonatomic, readonly) long long number;
+
+/// `TrackUID` -- the identity a file keeps across a remux, where ``number`` is positional and does
+/// not. What a persisted track selection must be keyed on.
+@property(nonatomic, readonly) unsigned long long uid;
+
 @property(nonatomic, readonly) MKVTrackType type;
 
 /// The Matroska `CodecID`, e.g. `V_MPEG4/ISO/AVC` or `A_AAC`. Required by the spec, so a file

@@ -76,6 +76,11 @@ public struct MatroskaTrack: Hashable, Sendable, Identifiable {
     /// identifier rather than an index into ``MatroskaFile/tracks``.
     public let number: Int
 
+    /// `TrackUID` — identity that survives a remux, where ``number`` is positional and does not.
+    /// What a selection persisted across sessions is keyed on; ``number`` is what a reader is
+    /// opened with.
+    public let uid: UInt64
+
     public var id: Int { number }
 
     public let kind: Kind
@@ -135,6 +140,7 @@ public struct MatroskaTrack: Hashable, Sendable, Identifiable {
 extension MatroskaTrack {
     init(_ description: MKVTrackDescription) {
         number = Int(description.number)
+        uid = description.uid
         codecID = description.codecID ?? ""
         codecName = description.codecName
         name = description.name
