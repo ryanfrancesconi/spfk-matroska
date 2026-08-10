@@ -186,6 +186,22 @@ final class MatroskaDualAudioTests {
         #expect(tracks.allSatisfy { $0.codec == "aac" })
     }
 
+    /// **An `.mka` has no video track, and that is the whole test.** `org.matroska.mka` conforms to
+    /// `.audio` rather than `.movie`, so a listing reached through a video test never runs — while
+    /// the demuxer itself never cared.
+    @Test func listsTheAudioTracksOfAVideolessMatroskaFile() async throws {
+        let mka = TestBundleResources.shared.dualaudio_mka
+
+        let file = try MatroskaFile(url: mka)
+        #expect(file.videoTrack == nil)
+
+        let tracks = await AudioTrackReader.readAnyContainer(from: mka)
+
+        #expect(tracks.count == 2)
+        #expect(tracks.map(\.language) == ["eng", "jpn"])
+        #expect(tracks.map(\.displayName) == ["English", "Japanese"])
+    }
+
     /// The video and subtitle tracks are not offered as audio, which a `compactMap` over every
     /// track would do if it keyed on anything but `kind`.
     @Test func describesOnlyTheAudioTracks() throws {
