@@ -111,26 +111,27 @@ final class MatroskaVideoDecoderTests {
         #expect(abs((sorted.last ?? 0) - 2.015) < 0.001)
     }
 
-    /// VP9 decode is a **hardware** capability, not something every Mac has — this one reports
-    /// `VTIsHardwareDecodeSupported(kCMVideoCodecType_VP9) == false` and VideoToolbox answers
-    /// `kVTCouldNotFindVideoDecoderErr`. The demux and the format description are fine either way,
-    /// which is what the branch pins: where a decoder exists the picture must arrive, and where one
-    /// does not the refusal must be the specific "no decoder" error rather than a decode failure
-    /// that would send someone looking at the parser.
-    @Test func decodesWebMVP9WhereTheHardwareCan() throws {
-        guard VTIsHardwareDecodeSupported(kCMVideoCodecType_VP9) else {
-            #expect(throws: MatroskaVideoDecoderError.self) {
-                try MatroskaVideoDecoder(url: webm)
-            }
-            return
-        }
-
+    /// VP9 decodes, which needs ``SupplementalVideoDecoders`` to have registered — the decoder is
+    /// not in a process that never asked for it, and its absence reads exactly like a machine with
+    /// no VP9 hardware.
+    @Test func decodesWebMVP9() throws {
         let decoder = try MatroskaVideoDecoder(url: webm)
         let frame = try #require(try decoder.firstImage())
 
         #expect(CVPixelBufferGetWidth(frame.image) == 160)
         #expect(CVPixelBufferGetHeight(frame.image) == 120)
         #expect(meanLuma(frame.image) > 1)
+    }
+
+    /// The registration itself, asserted where it is visible: VideoToolbox reports no VP9 hardware
+    /// until asked for the decoder.
+    ///
+    /// One-directional on purpose — registration is process-global and another test may have run
+    /// first, so this can only assert the state that holds afterwards.
+    @Test func registeringSupplementalDecodersMakesVP9Available() {
+        SupplementalVideoDecoders.register()
+
+        #expect(VTIsHardwareDecodeSupported(kCMVideoCodecType_VP9))
     }
 
     /// The still-preview path: one picture out of a container AVFoundation will not open, without

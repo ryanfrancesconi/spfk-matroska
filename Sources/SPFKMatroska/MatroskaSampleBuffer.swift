@@ -2,6 +2,7 @@
 
 import CoreMedia
 import Foundation
+import VideoToolbox
 
 /// Errors thrown while packaging demuxed frames for Core Media.
 public enum MatroskaSampleBufferError: Error, Equatable, Sendable {
@@ -44,8 +45,13 @@ public extension MatroskaTrack {
 
     /// Whether this package can build a decoder for the track's codec.
     ///
-    /// Header-level: no packet is decoded and no session is created, so it is cheap enough for a
-    /// parse. Optimistic only about a codec the system claims and then fails to instantiate.
+    /// No packet is decoded, but the video branch does create and release a decompression session:
+    /// a fourCC that maps to a `CMVideoCodecType` says only that Core Media names the codec, and
+    /// AV1 is in that table with no decoder on most machines. Measured 2026-08-10 at 0.6 ms per
+    /// call after VideoToolbox's one-time ~75 ms warm-up, which a parse can afford.
+    ///
+    /// One case still answers yes and then fails: a VP9 stream outside profile 0, because the
+    /// session is created against the assumed configuration in ``defaultVP9Configuration``.
     var isDecodable: Bool {
         switch kind {
         case .audio:
@@ -54,11 +60,38 @@ public extension MatroskaTrack {
             (try? makeAudioStreamBasicDescription()) != nil
 
         case .video:
-            codecFourCC.flatMap { MatroskaTrack.codecType(for: $0) } != nil
+            (try? makeFormatDescription()).map(MatroskaTrack.canInstantiateDecoder) ?? false
 
         case .subtitle, .metadata, .other:
             false
         }
+    }
+
+    /// Whether VideoToolbox will build a decoder for this description.
+    ///
+    /// Asked of the track's real description rather than a synthetic one: a bare description with
+    /// no configuration atom is refused for HEVC and VP9 alike, so probing by codec type alone
+    /// reports codecs undecodable that decode.
+    ///
+    /// Deliberately uncached. A per-codec answer would claim an unsupported profile or frame size
+    /// is decodable because some other file's was.
+    private static func canInstantiateDecoder(for formatDescription: CMVideoFormatDescription) -> Bool {
+        var session: VTDecompressionSession?
+
+        let status = VTDecompressionSessionCreate(
+            allocator: kCFAllocatorDefault,
+            formatDescription: formatDescription,
+            decoderSpecification: nil,
+            imageBufferAttributes: nil,
+            outputCallback: nil,
+            decompressionSessionOut: &session
+        )
+
+        if let session {
+            VTDecompressionSessionInvalidate(session)
+        }
+
+        return status == noErr
     }
 
     /// Builds the `CMVideoFormatDescription` a decoder needs to make sense of this track's frames.
@@ -69,6 +102,11 @@ public extension MatroskaTrack {
     ///
     /// - Throws: ``MatroskaSampleBufferError``.
     func makeFormatDescription() throws -> CMVideoFormatDescription {
+        // Every path that decodes video builds its description here — the decoder, the sample
+        // buffer reader behind the display layer, and the decodability probe — so registering here
+        // is the one place a new caller cannot forget. See ``SupplementalVideoDecoders``.
+        SupplementalVideoDecoders.register()
+
         guard case let .video(parameters) = kind,
               parameters.pixelWidth > 0, parameters.pixelHeight > 0
         else {
@@ -84,6 +122,10 @@ public extension MatroskaTrack {
         if let configurationAtomKey, let codecPrivate, codecPrivate.isEmpty == false {
             extensions[kCMFormatDescriptionExtension_SampleDescriptionExtensionAtoms] =
                 [configurationAtomKey: codecPrivate] as CFDictionary
+
+        } else if codecID == "V_VP9" {
+            extensions[kCMFormatDescriptionExtension_SampleDescriptionExtensionAtoms] =
+                ["vpcC": MatroskaTrack.defaultVP9Configuration] as CFDictionary
 
         } else if MatroskaTrack.requiresCodecPrivate.contains(codecID) {
             // H.264 and HEVC keep their parameter sets out of band, so a decoder has nothing to
@@ -151,6 +193,30 @@ public extension MatroskaTrack {
     /// Codecs whose parameter sets live outside the bitstream, so a decoder cannot start without
     /// the configuration blob.
     private static let requiresCodecPrivate: Set<String> = ["V_MPEG4/ISO/AVC", "V_MPEGH/ISO/HEVC"]
+
+    /// The `vpcC` box VideoToolbox requires for a `vp09` description, for the files that carry none.
+    ///
+    /// ffmpeg's WebM muxer writes no `CodecPrivate` for VP9, so nearly no WebM has one, and without
+    /// an atom `VTDecompressionSessionCreate` answers `codecBadDataErr` (-8971).
+    ///
+    /// **Profile 0 only — 8-bit 4:2:0, which is what almost every VP9 stream is.** The profile,
+    /// depth and subsampling stated here are read by the decoder rather than taken from the
+    /// bitstream: measured 2026-08-10, a profile-2 (10-bit) stream described this way creates a
+    /// session and then fails every frame with -12909. Closing that needs the profile read out of
+    /// the first keyframe's uncompressed header, which the container does not carry.
+    ///
+    /// Layout is the VP Codec ISO Media File Format Binding: version and flags, profile, level,
+    /// then depth, subsampling and range packed into one byte, three colour bytes, and the length
+    /// of the initialization data that VP9 never has. Level and colour are left unspecified — the
+    /// container states neither, and neither affects whether a frame decodes.
+    private static let defaultVP9Configuration = Data([
+        1, 0, 0, 0,
+        0,
+        0,
+        (8 << 4) | (1 << 1) | 0,
+        2, 2, 2,
+        0, 0,
+    ])
 
     /// Read from the `kCMVideoCodecType_*` constants rather than transcribed, same as
     /// ``codecFourCC``.

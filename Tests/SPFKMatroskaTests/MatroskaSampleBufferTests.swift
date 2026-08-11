@@ -68,6 +68,31 @@ final class MatroskaSampleBufferTests {
         }
     }
 
+    // MARK: - Decodability
+
+    @Test func reportsDecodableForCodecsWithADecoder() throws {
+        #expect(try #require(try MatroskaFile(url: mkv).videoTrack).isDecodable)
+        #expect(try #require(try MatroskaFile(url: webm).videoTrack).isDecodable)
+    }
+
+    /// **A fourCC that maps is not a decoder.** `V_AV1` resolves to `kCMVideoCodecType_AV1` and has
+    /// no decoder on most machines, so a check that stops at the codec table reports it decodable
+    /// and the caller gets a black frame instead of an unsupported-format message.
+    @Test func reportsUndecodableForACodecWithNoDecoder() {
+        #expect(MatroskaTrack.videoStub(codecID: "V_AV1").isDecodable == false)
+    }
+
+    /// A codec outside the table at all, which is the other way a video track fails.
+    @Test func reportsUndecodableForACodecOutsideTheTable() {
+        #expect(MatroskaTrack.videoStub(codecID: "V_VP8").isDecodable == false)
+    }
+
+    /// H.264 keeps its parameter sets out of band, so a track with no `CodecPrivate` cannot be
+    /// described and therefore cannot be decoded — undecodable rather than a thrown error.
+    @Test func reportsUndecodableForH264WithNoCodecPrivate() {
+        #expect(MatroskaTrack.videoStub(codecID: "V_MPEG4/ISO/AVC").isDecodable == false)
+    }
+
     // MARK: - Sample buffers
 
     @Test func buildsASampleBufferWithMatroskaTiming() throws {
@@ -175,5 +200,32 @@ final class MatroskaSampleBufferTests {
     private final class DecodeResult: @unchecked Sendable {
         var status: OSStatus = noErr
         var imageBuffer: CVImageBuffer?
+    }
+}
+
+private extension MatroskaTrack {
+    /// A video track carrying nothing but a `CodecID` and a frame size, for asking what a codec
+    /// alone can support.
+    static func videoStub(codecID: String) -> MatroskaTrack {
+        MatroskaTrack(
+            number: 1,
+            uid: 1,
+            kind: .video(
+                VideoParameters(
+                    pixelWidth: 160,
+                    pixelHeight: 120,
+                    displayWidth: 0,
+                    displayHeight: 0,
+                    displayUnit: .pixels,
+                    declaredFrameRate: nil
+                )
+            ),
+            codecID: codecID,
+            codecName: nil,
+            name: nil,
+            language: nil,
+            codecPrivate: nil,
+            defaultFrameDurationNanoseconds: nil
+        )
     }
 }
