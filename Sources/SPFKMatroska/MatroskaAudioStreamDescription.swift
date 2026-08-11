@@ -64,6 +64,57 @@ public extension MatroskaTrack {
         return UInt32(streamInfo.maximumBlockSize)
     }
 
+    /// Frames `packet` decodes to, in this track's own sample rate.
+    ///
+    /// **Asked per packet, because not every codec has a track-level answer.** Opus states its
+    /// length in each packet's TOC byte and may mix frame sizes within one stream, so
+    /// ``audioFramesPerPacket`` is `nil` for it and this reads the packet instead. Everything else
+    /// answers from the fixed figure and ignores the data.
+    ///
+    /// `nil` when neither is knowable, which leaves a caller to fall back on container timing.
+    func audioFrameCount(forPacket packet: Data) -> Int? {
+        if let fixed = audioFramesPerPacket {
+            return Int(fixed)
+        }
+
+        guard MatroskaAudioCodec(rawValue: codecID) == .opus,
+              let frames = MatroskaOpusPacket.frameCount(packet)
+        else {
+            return nil
+        }
+
+        guard case let .audio(parameters) = kind, parameters.sampleRate > 0 else {
+            return frames
+        }
+
+        // Opus counts in 48 kHz frames whatever the track states, so a track decoded at another
+        // rate needs them rescaled or every packet lands in the wrong place.
+        return Int((Double(frames) * parameters.sampleRate / 48000).rounded())
+    }
+
+    /// The Opus encoder priming this track's stream begins with, in 48 kHz frames.
+    ///
+    /// **Core Audio decodes these as audio and nothing downstream trims them**, so an Opus track
+    /// decodes this many frames longer than the container's timeline — measured 2026-08-10 against
+    /// ffmpeg, which does trim. Not yet applied by ``MatroskaAudioDecoder``; the value is here so
+    /// that whatever applies it reads the file rather than assuming libopus's 312-frame default.
+    ///
+    /// `OpusHead` bytes 10-11, little endian. `nil` for a track that is not Opus or whose header is
+    /// too short to state one.
+    var opusPreSkipFrames: Int? {
+        guard codecID == MatroskaAudioCodec.opus.rawValue,
+              let codecPrivate,
+              codecPrivate.count >= 12,
+              codecPrivate.prefix(8).elementsEqual("OpusHead".utf8)
+        else {
+            return nil
+        }
+
+        let bytes = Array(codecPrivate)
+
+        return Int(bytes[10]) | Int(bytes[11]) << 8
+    }
+
     /// The FLAC stream's `STREAMINFO`, or `nil` when the track is not FLAC or states no usable
     /// `CodecPrivate`.
     var flacStreamInfo: MatroskaFLACStreamInfo? {

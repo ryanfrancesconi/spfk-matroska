@@ -80,17 +80,15 @@ public final class MatroskaSampleBufferReader: @unchecked Sendable {
             audioTrack = track
             audioFormatDescription = description
 
-            if case let .audio(parameters) = track.kind,
-               let framesPerPacket = track.audioFramesPerPacket,
-               parameters.sampleRate > 0 {
-                audioPacketGrid = (Int64(framesPerPacket), Int32(parameters.sampleRate))
+            if case let .audio(parameters) = track.kind, parameters.sampleRate > 0 {
+                audioSampleRate = Int32(parameters.sampleRate)
             } else {
-                audioPacketGrid = nil
+                audioSampleRate = nil
             }
         } else {
             audioTrack = nil
             audioFormatDescription = nil
-            audioPacketGrid = nil
+            audioSampleRate = nil
         }
     }
 
@@ -134,10 +132,12 @@ public final class MatroskaSampleBufferReader: @unchecked Sendable {
 
     // MARK: - Audio timing
 
-    /// Packet grid the audio is placed on: how many frames each packet decodes to, and at what
-    /// rate. `nil` for a codec whose packets are not a fixed length, which then keeps the
+    /// The rate the audio grid is counted in. `nil` for a track stating none, which then keeps the
     /// container's own timing.
-    private let audioPacketGrid: (framesPerPacket: Int64, sampleRate: Int32)?
+    ///
+    /// How long each packet is comes from ``MatroskaTrack/audioFrameCount(forPacket:)`` rather than
+    /// being fixed here: Opus states its length per packet and can vary it within one stream.
+    private let audioSampleRate: Int32?
 
     /// Where the current run of audio started, and how many frames into it we are.
     private var audioAnchor: CMTime?
@@ -154,9 +154,20 @@ public final class MatroskaSampleBufferReader: @unchecked Sendable {
     ///
     /// A jump larger than half a second is treated as a real discontinuity — a gap in the file, or
     /// a seek — and re-anchors rather than being smoothed away.
+    ///
+    /// **Returning `nil` costs the audio entirely, rather than degrading it.** The container states
+    /// no block duration, so a buffer built from its timing carries an invalid one, and
+    /// `AVSampleBufferAudioRenderer` rejects every such buffer with
+    /// `kCMSampleBufferError_SampleTimingInfoInvalid` (-12740) while the picture plays on.
     private func audioTiming(for frame: MatroskaFrame) -> CMSampleTimingInfo? {
-        guard let grid = audioPacketGrid else { return nil }
+        guard let sampleRate = audioSampleRate,
+              let audioTrack,
+              let framesInPacket = audioTrack.audioFrameCount(forPacket: frame.data)
+        else {
+            return nil
+        }
 
+        let grid = (framesPerPacket: Int64(framesInPacket), sampleRate: sampleRate)
         let containerTime = CMTime(seconds: frame.timestamp, preferredTimescale: grid.sampleRate)
 
         let anchor: CMTime

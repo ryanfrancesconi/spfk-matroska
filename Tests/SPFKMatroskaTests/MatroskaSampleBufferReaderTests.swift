@@ -146,17 +146,69 @@ struct MatroskaSampleBufferReaderTests {
         #expect(asbd.mFramesPerPacket == 1024)
     }
 
-    /// A codec macOS cannot decode must not stop the picture. `sample.webm` carries Opus, which is
-    /// outside the table, so the audio track is dropped and video still opens.
-    @Test func anUndescribableAudioTrackDoesNotFailTheOpen() throws {
+    /// WebM's Opus track is described and fed alongside the picture, which is what gives a `.webm`
+    /// sound in TorchTag. Core Audio decodes Opus — it is in
+    /// `kAudioFormatProperty_DecodeFormatIDs` — so no bundled library is involved.
+    ///
+    /// **The tolerance this used to cover — an undescribable audio track being dropped rather than
+    /// failing the open — no longer has a committed fixture**, because every bundled Matroska now
+    /// carries a codec in the table. Vorbis is the remaining undescribable case and its fixture is
+    /// scratch. The behavior itself is unchanged in `MatroskaSampleBufferReader.init`.
+    @Test func theWebMOpusTrackIsDescribedAndDelivered() throws {
         let reader = try MatroskaSampleBufferReader(url: webm)
 
-        #expect(reader.audioTrack == nil)
-        #expect(reader.audioFormatDescription == nil)
+        let track = try #require(reader.audioTrack)
+        #expect(track.codecID == "A_OPUS")
+        #expect(reader.audioFormatDescription != nil)
 
         let batch = try reader.next(upTo: 16)
         #expect(batch.video.isEmpty == false)
-        #expect(batch.audio.isEmpty)
+        #expect(batch.audio.isEmpty == false)
+    }
+
+    /// **Every audio buffer must carry numeric timing, or the renderer silently drops all of them.**
+    /// Matroska states no block duration, so a buffer that falls back to container timing gets an
+    /// invalid one and `AVSampleBufferAudioRenderer` refuses it with
+    /// `kCMSampleBufferError_SampleTimingInfoInvalid` (-12740) — the picture plays and the file is
+    /// mute, which reads as a decoder problem and is not one.
+    ///
+    /// Asserted for both codecs: AAC has a fixed packet length and Opus states one per packet, and
+    /// only the fixed case worked when this was written.
+    @Test(arguments: [TestBundleResources.shared.sample_mkv, TestBundleResources.shared.sample_webm])
+    func everyAudioBufferCarriesNumericTiming(url: URL) throws {
+        let reader = try MatroskaSampleBufferReader(url: url)
+        let batch = try reader.next(upTo: 64)
+
+        #expect(batch.audio.isEmpty == false)
+
+        for buffer in batch.audio {
+            let duration = CMSampleBufferGetDuration(buffer)
+            let presentationTime = CMSampleBufferGetPresentationTimeStamp(buffer)
+
+            #expect(duration.isNumeric, "non-numeric duration \(duration)")
+            #expect(presentationTime.isNumeric, "non-numeric pts \(presentationTime)")
+            #expect(duration.seconds > 0)
+        }
+    }
+
+    /// Opus packet lengths come from each packet rather than a track-level figure, and this file
+    /// mixes them — 501 packets decode to 480,840 frames where a uniform 960 would give 480,960.
+    @Test func opusPacketLengthsAreReadFromEachPacket() throws {
+        let track = try #require(try MatroskaFile(url: webm).audioTrack)
+
+        #expect(track.audioFramesPerPacket == nil, "Opus has no fixed track-level length")
+
+        let reader = try MatroskaFrameReader(url: webm)
+        var counts: Set<Int> = []
+
+        while let frame = try reader.nextFrame() {
+            guard frame.trackNumber == track.number, frame.data.isEmpty == false else { continue }
+            counts.insert(try #require(track.audioFrameCount(forPacket: frame.data)))
+        }
+
+        #expect(counts.isEmpty == false)
+        // 20 ms at 48 kHz is what a WebM muxer writes by default.
+        #expect(counts.contains(960), "packet lengths seen: \(counts.sorted())")
     }
 
     // MARK: - Seeking
