@@ -25,9 +25,13 @@ public enum SupplementalVideoDecoders {
         _ = registered
     }
 
+    // No macOS clause: the API is macOS 11+ and this package's floor is 13. iOS gained it only in
+    // 26.2, well above the declared floor.
     private static let registered: Bool = {
-        for codec in codecs {
-            VTRegisterSupplementalVideoDecoderIfAvailable(codec)
+        if #available(iOS 26.2, *) {
+            for codec in codecs {
+                VTRegisterSupplementalVideoDecoderIfAvailable(codec)
+            }
         }
         return true
     }()
