@@ -22,52 +22,40 @@ conversion machinery.
 
 WebM is a Matroska profile, so one parser covers both containers.
 
-## Usage
+## Reading a file
 
-```swift
-let file = try MatroskaFile(url: url)
+`MatroskaFile` opens a URL and answers the container's doc type (Matroska or WebM), its duration
+where it states one, and every track entry. Reading headers stops at the first cluster, so it costs
+the front of the file rather than a scan.
 
-file.docType           // .matroska or .webm
-file.duration          // seconds, nil when the file states none
-file.tracks            // every TrackEntry
+`MatroskaTrack` carries a video track's codec ID, its `codecPrivate` blob verbatim, and its frame
+rate, and builds `spfk-video`'s `VideoTrackProperties` — so a container AVFoundation cannot open
+still reports resolution and codec through the same type as everything else. It builds
+`AudioTrackDescription` the same way, so the audio-track picker is written once for both backends.
 
-if let video = file.videoTrack {
-    video.codecID      // "V_MPEG4/ISO/AVC"
-    video.codecPrivate // the avcC blob, verbatim
-    video.frameRate
-}
+## Frames
 
-// Video-technical properties in spfk-video's shared shape, so a container AVFoundation
-// cannot open still reports resolution and codec through the same type as everything else.
-file.videoTrackProperties
-```
+`MatroskaFrameReader` walks a track's blocks and seeks by timestamp, handing back a `MatroskaFrame`
+with its data, timestamp and keyframe flag. `MatroskaSampleBufferReader` wraps those as
+`CMSampleBuffer`s — a `MatroskaSampleBatch` at a time — for an `AVSampleBufferDisplayLayer` or an
+`AVSampleBufferAudioRenderer`.
 
-Reading headers stops at the first cluster, so it costs the front of the file rather than a scan.
-
-### Frames
-
-`MatroskaFrameReader` walks a track's blocks and seeks by timestamp, and
-`MatroskaSampleBufferReader` wraps them as `CMSampleBuffer`s for an
-`AVSampleBufferDisplayLayer` or `AVSampleBufferAudioRenderer`.
-
-```swift
-let reader = try MatroskaFrameReader(url: url, trackNumber: track.number)
-try reader.seek(to: 90.0)
-
-while let frame = try reader.nextFrame() {
-    frame.data, frame.timestamp, frame.isKeyframe
-}
-```
+`MatroskaVideoDecoder` drives VideoToolbox over that, producing `MatroskaVideoFrame`s.
+`SupplementalVideoDecoders` covers the formats macOS will decode only once their decoder is
+requested.
 
 **Cues typically index only the video track.** Clusters interleave every track, so a seek on an
 audio track resolves through the video track's cue point and then walks — which is what makes
 seeking an audio-only read of a `.mkv` fast rather than a decode from zero.
 
-### Audio stream description
+## Audio stream description
 
 `MatroskaTrack.makeAudioStreamBasicDescription()` is the single description every consumer builds
 from — the format description for the sample-buffer path, the decoder's input format, and the
 `isDecodable` answer all derive from it, so they cannot disagree.
+
+`MatroskaAudioCodec` names the codecs the reader understands, `MatroskaPCMSampleFormat` the raw
+sample layouts, and `MatroskaFLACStreamInfo` the STREAMINFO block a FLAC track carries.
 
 It is exacting in a way worth knowing: **a wrong `AudioStreamBasicDescription` does not fail.**
 `AVAudioConverter` builds happily from one, consumes every packet, emits zero frames and reports
@@ -88,6 +76,11 @@ which is not a cost callers should pay for a container reader.
 The dependency on `spfk-video` runs one way — this package builds that package's
 `VideoTrackProperties`, and `spfk-video` stays a pure-Swift leaf with no C++ in its graph.
 
+## Requirements
+
+- **Platforms:** macOS 13+, iOS 16+
+- **Swift:** 6.2+
+
 ## Dependencies
 
 | Package | Purpose |
@@ -96,3 +89,7 @@ The dependency on `spfk-video` runs one way — this package builds that package
 | [spfk-base](https://github.com/ryanfrancesconi/spfk-base) | Core utilities and logging |
 | [spfk-video](https://github.com/ryanfrancesconi/spfk-video) | `VideoTrackProperties`, `VideoFrameExtractor` |
 | [spfk-testing](https://github.com/ryanfrancesconi/spfk-testing) | Matroska fixtures (test target only) |
+
+## About
+
+Spongefork is the personal software projects of musician and developer [Ryan Francesconi](https://spongefork.com). Dedicated to creative sound manipulation, his first application, Spongefork, was released in 1999 for macOS 8. From 2026, Spongefork returns as his software container for more musical experimentation. In addition to [software releases](https://spongefork.com/shadowtag/), open source components can be found on his [GitHub page](https://github.com/ryanfrancesconi).
