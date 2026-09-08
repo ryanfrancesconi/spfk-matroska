@@ -19,7 +19,12 @@ public extension VideoTrackReader {
     /// `quickTimeUserData` stays nil, being a `moov`-atom concept with no Matroska equivalent.
     static func readAnyContainer(
         from url: URL
-    ) async -> (videoTrack: VideoTrackProperties?, quickTimeUserData: QuickTimeUserData?, isPlayable: Bool) {
+    ) async -> (
+        videoTrack: VideoTrackProperties?,
+        quickTimeUserData: QuickTimeUserData?,
+        isPlayable: Bool,
+        hasProtectedContent: Bool
+    ) {
         let result = await read(from: url)
 
         guard result.videoTrack == nil else {
@@ -29,7 +34,8 @@ public extension VideoTrackReader {
         return (
             videoTrack: MatroskaFile.videoTrackProperties(for: url),
             quickTimeUserData: result.quickTimeUserData,
-            isPlayable: result.isPlayable
+            isPlayable: result.isPlayable,
+            hasProtectedContent: result.hasProtectedContent
         )
     }
 }
