@@ -156,6 +156,56 @@ final class MatroskaDualAudioTests {
         #expect(audio.audioTrackDescription?.localizedLanguage == "English")
     }
 
+    /// Writes a copy of the fixture with the one occurrence of `element` replaced byte-for-byte.
+    private func patchedCopy(replacing element: Data, with replacement: Data) throws -> URL {
+        var data = try Data(contentsOf: url)
+        var occurrences = 0
+        var start = data.startIndex
+
+        while let range = data.range(of: element, in: start ..< data.endIndex) {
+            occurrences += 1
+            start = range.upperBound
+        }
+
+        #expect(occurrences == 1)
+        let range = try #require(data.range(of: element))
+        data.replaceSubrange(range, with: replacement)
+
+        let patched = FileManager.default.temporaryDirectory
+            .appendingPathComponent("spfk-patched-\(UUID().uuidString).mkv")
+        try data.write(to: patched)
+        return patched
+    }
+
+    /// A name with a byte that isn't valid UTF-8 reads with a replacement character, as ffprobe
+    /// shows it, rather than not at all.
+    @Test func readsANameWithAnInvalidByteLossily() throws {
+        // `Name` (0x536E), a 1-byte size of 7, then "English".
+        let element = Data([0x53, 0x6E, 0x87]) + Data("English".utf8)
+        let replacement = Data([0x53, 0x6E, 0x87]) + Data("Engl".utf8) + Data([0xE9]) + Data("sh".utf8)
+        let patched = try patchedCopy(replacing: element, with: replacement)
+        defer { try? FileManager.default.removeItem(at: patched) }
+
+        let expected = String(decoding: Data("Engl".utf8) + [0xE9] + Data("sh".utf8), as: UTF8.self)
+        let file = try MatroskaFile(url: patched)
+
+        #expect(file.audioTrack?.name == expected)
+    }
+
+    /// A language that can't be decoded is undetermined, not the spec default for an absent one.
+    @Test func readsAnUndecodableLanguageAsUndetermined() throws {
+        // `Language` (0x22B59C), a 1-byte size of 3, then "jpn".
+        let element = Data([0x22, 0xB5, 0x9C, 0x83]) + Data("jpn".utf8)
+        let replacement = Data([0x22, 0xB5, 0x9C, 0x83]) + Data("j".utf8) + Data([0xFF]) + Data("n".utf8)
+        let patched = try patchedCopy(replacing: element, with: replacement)
+        defer { try? FileManager.default.removeItem(at: patched) }
+
+        let file = try MatroskaFile(url: patched)
+        let japanese = try #require(file.tracks.first { $0.name == "Japanese" })
+
+        #expect(japanese.language == "und")
+    }
+
     /// A stated language still wins — the default fills a gap rather than overwriting.
     @Test func aStatedLanguageIsNotOverwritten() throws {
         let file = try MatroskaFile(url: url)

@@ -13,7 +13,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// Converts a parser-owned C string, which is NULL for any element the file omits.
+/// Converts a parser-owned C string, which is NULL for any element the file omits. Invalid UTF-8
+/// decodes with U+FFFD, so a present element never returns nil.
 NSString *_Nullable MKVStringOrNil(const char *_Nullable value);
 
 NSError *MKVMakeError(MKVError code, NSURL *url, NSString *reason);
