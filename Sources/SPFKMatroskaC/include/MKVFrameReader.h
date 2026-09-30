@@ -26,7 +26,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// The next frame, or `nil` at end of stream **or** on failure.
 ///
-/// Check ``failure`` to tell those apart: it is nil at a clean end of stream. Split this way
+/// Check ``failure`` to tell those apart: it is nil at a clean end of stream, including at the cut
+/// in a file ``isTruncated`` describes. Split this way
 /// because an ObjC method returning a nullable object plus an `NSError **` imports into Swift as
 /// `throws` returning non-optional, which cannot express "no more frames" without inventing an
 /// error for the ordinary end of a file.
@@ -34,6 +35,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// The error that stopped the walk, or nil if it ran to a clean end.
 @property (nonatomic, readonly, nullable) NSError *failure;
+
+/// Whether the file ends before its segment says it does, as a crashed recording does. The walk
+/// then ends cleanly after the last complete block.
+@property (nonatomic, readonly) BOOL isTruncated;
 
 /// Repositions the walk to the keyframe at or before `timeNanoseconds` on `trackNumber`.
 ///

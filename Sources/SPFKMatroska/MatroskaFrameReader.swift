@@ -22,6 +22,10 @@ public final class MatroskaFrameReader {
     /// The file's headers, so reading frames does not mean opening the file twice.
     public let file: MatroskaFile
 
+    /// Whether the file ends before its segment says it does, as a crashed recording does. The walk
+    /// then ends after the last complete block, without an error.
+    public var isTruncated: Bool { reader.isTruncated }
+
     /// Opens `url` and parses its headers.
     ///
     /// - Throws: ``MatroskaError``.
@@ -58,7 +62,8 @@ public final class MatroskaFrameReader {
     /// The next frame, or `nil` at the end of the file.
     ///
     /// - Throws: ``MatroskaError`` if the walk stopped on a malformed cluster rather than reaching
-    ///   the end. A clean end is `nil` and not an error.
+    ///   the end. A clean end is `nil` and not an error, and so is the cut in a file
+    ///   ``isTruncated`` describes.
     public func nextFrame() throws -> MatroskaFrame? {
         guard let frame = reader.nextFrame() else {
             if let failure = reader.failure {

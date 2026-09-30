@@ -9,99 +9,29 @@
 @property (nonatomic, readwrite, nullable) NSError *failure;
 @end
 
-/// How many SeekHead elements deep to follow before giving up. Two levels is the shape real files
-/// have; the cap exists so a file whose SeekHeads point at each other cannot loop.
-static const int MKVMaxSeekHeadDepth = 4;
+/// Whether the segment's declared size runs past the end of the file. libwebm demotes such a
+/// segment to unknown size, so its `m_size` cannot answer this.
+static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvReader *reader) {
+    long long total = 0;
+    long long available = 0;
 
-/// The segment-relative position of the `Cues` element reachable from the SeekHead at
-/// `seekHeadOffset`, or -1.
-///
-/// libwebm keeps only the **first** SeekHead and its `Parse` never follows an entry that names
-/// another one, so a file written in the usual two-level form -- a small SeekHead at the head of
-/// the file naming a second one at the tail, which names Cues -- looks to it like a file with no
-/// index at all. Walking the chain here rather than patching the vendored parser keeps
-/// `spfk-mkvparser` a clean mirror of upstream.
-///
-/// Reads through mkvparser's own EBML primitives, so this is a traversal rather than a second
-/// implementation of the format.
-static long long MKVCuesOffsetInSeekHead(mkvparser::Segment *segment,
-                                         long long seekHeadOffset,
-                                         int depth) {
-    if (segment == nullptr || seekHeadOffset < 0 || depth > MKVMaxSeekHeadDepth) {
-        return -1;
+    if (reader->Length(&total, &available) < 0 || total < 0) {
+        return NO;
     }
 
-    mkvparser::IMkvReader *reader = segment->m_pReader;
-    const long long segmentStop = (segment->m_size < 0) ? -1 : segment->m_start + segment->m_size;
-
-    long long pos = segment->m_start + seekHeadOffset;
-
-    if (segmentStop >= 0 && pos >= segmentStop) {
-        return -1;
-    }
-
+    long long pos = segment->m_element_start;
     long long id = 0;
     long long size = 0;
 
-    if (mkvparser::ParseElementHeader(reader, pos, segmentStop, id, size) < 0 ||
-        id != libwebm::kMkvSeekHead) {
-        return -1;
+    if (mkvparser::ParseElementHeader(reader, pos, -1, id, size) < 0) {
+        return NO;
     }
 
-    const long long stop = pos + size;
+    // The Segment ID is four bytes, so what remains before the payload is the size field.
+    const long long sizeLength = segment->m_start - segment->m_element_start - 4;
+    const long long unknownSize = (1LL << (7 * sizeLength)) - 1;
 
-    // Cues wins over a nested SeekHead, so the whole level is read before recursing rather than
-    // descending at the first SeekHead entry -- a file naming both would otherwise take the long
-    // way around to the same place.
-    long long nestedOffset = -1;
-
-    while (pos < stop) {
-        long long entryID = 0;
-        long long entrySize = 0;
-
-        if (mkvparser::ParseElementHeader(reader, pos, stop, entryID, entrySize) < 0) {
-            return -1;
-        }
-
-        const long long entryStop = pos + entrySize;
-
-        if (entryID == libwebm::kMkvSeek) {
-            long long targetID = -1;
-            long long targetOffset = -1;
-            long long field = pos;
-
-            while (field < entryStop) {
-                long long fieldID = 0;
-                long long fieldSize = 0;
-
-                if (mkvparser::ParseElementHeader(reader, field, entryStop, fieldID, fieldSize) < 0) {
-                    return -1;
-                }
-
-                if (fieldID == libwebm::kMkvSeekID) {
-                    long length = 0;
-                    targetID = mkvparser::ReadID(reader, field, length);
-                } else if (fieldID == libwebm::kMkvSeekPosition) {
-                    targetOffset = mkvparser::UnserializeUInt(reader, field, fieldSize);
-                }
-
-                field += fieldSize;
-            }
-
-            if (targetID == libwebm::kMkvCues && targetOffset >= 0) {
-                return targetOffset;
-            }
-
-            // Never revisit the level being read, which is what a self-referential entry asks for.
-            if (targetID == libwebm::kMkvSeekHead && targetOffset >= 0 && targetOffset != seekHeadOffset) {
-                nestedOffset = targetOffset;
-            }
-        }
-
-        pos = entryStop;
-    }
-
-    return (nestedOffset >= 0) ? MKVCuesOffsetInSeekHead(segment, nestedOffset, depth + 1) : -1;
+    return size != unknownSize && segment->m_start + size > total;
 }
 
 @implementation MKVFrameReader {
@@ -118,6 +48,11 @@ static long long MKVCuesOffsetInSeekHead(mkvparser::Segment *segment,
     BOOL _finished;
     NSURL *_url;
     NSDictionary<NSNumber *, NSNumber *> *_defaultDurations;
+
+    // A truncated file's last cluster, which libwebm reports as empty and so never loads.
+    long long _fileLength;
+    const mkvparser::Cluster *_partialCluster;
+    BOOL _searchedForPartialCluster;
 }
 
 - (nullable instancetype)initWithURL:(NSURL *)url error:(NSError **)error {
@@ -174,6 +109,10 @@ static long long MKVCuesOffsetInSeekHead(mkvparser::Segment *segment,
 
     _segmentDescription = description;
 
+    long long available = 0;
+    _reader->Length(&_fileLength, &available);
+    _isTruncated = MKVSegmentIsTruncated(_segment, _reader);
+
     // Cached because a frame's duration comes from its track, and looking it up per frame would
     // walk the track list for every one of them.
     NSMutableDictionary<NSNumber *, NSNumber *> *durations = [NSMutableDictionary dictionary];
@@ -196,6 +135,13 @@ static long long MKVCuesOffsetInSeekHead(mkvparser::Segment *segment,
 /// The cluster after `current`, or the first when `current` is null, loading from the file only as
 /// far as needed. Returns null at a clean end (``_finished``) or on failure (``failure``).
 - (const mkvparser::Cluster *)clusterAfter:(const mkvparser::Cluster *)current {
+    // The partial cluster is only preloaded, and libwebm cannot step past a preloaded cluster in a
+    // segment of unknown size.
+    if (current != nullptr && current == _partialCluster) {
+        _finished = YES;
+        return nullptr;
+    }
+
     while (true) {
         const mkvparser::Cluster *next =
             (current == nullptr) ? _segment->GetFirst() : _segment->GetNext(current);
@@ -207,8 +153,7 @@ static long long MKVCuesOffsetInSeekHead(mkvparser::Segment *segment,
         // EOS here means "not loaded yet", not necessarily end of file -- the parser hands back the
         // EOS sentinel and expects the caller to load more if it wants more.
         if (_segment->DoneParsing()) {
-            _finished = YES;
-            return nullptr;
+            return [self partialClusterOrEnd];
         }
 
         const unsigned long countBefore = _segment->GetCount();
@@ -221,13 +166,58 @@ static long long MKVCuesOffsetInSeekHead(mkvparser::Segment *segment,
             return nullptr;
         }
 
-        // A load that adds no cluster and does not report done would spin forever, which is what a
-        // truncated file produces. Treat it as the end rather than hanging.
+        // A load that adds no cluster and does not report done would spin forever. libwebm skips a
+        // cluster whose declared end is past the end of the file this way, so that one is found
+        // separately.
         if (_segment->GetCount() == countBefore) {
-            _finished = YES;
-            return nullptr;
+            return [self partialClusterOrEnd];
         }
     }
+}
+
+/// The cluster a truncated file stops inside, or null at the end of the walk.
+- (const mkvparser::Cluster *)partialClusterOrEnd {
+    if (_isTruncated && !_searchedForPartialCluster) {
+        _searchedForPartialCluster = YES;
+        _partialCluster = [self findPartialCluster];
+    }
+
+    if (_partialCluster != nullptr) {
+        return _partialCluster;
+    }
+
+    _finished = YES;
+    return nullptr;
+}
+
+/// Scans the segment's element headers for the first cluster after the last one loaded.
+/// `ParseElementHeader` checks only the header against the end of the file, so it finds a cluster
+/// whose payload runs past it.
+- (const mkvparser::Cluster *)findPartialCluster {
+    const mkvparser::Cluster *last = _segment->GetLast();
+    const long long lastPosition = (last == nullptr || last->EOS()) ? -1 : last->GetPosition();
+
+    long long pos = _segment->m_start;
+
+    while (pos < _fileLength) {
+        const long long elementStart = pos;
+        long long id = 0;
+        long long size = 0;
+
+        if (mkvparser::ParseElementHeader(_reader, pos, _fileLength, id, size) < 0) {
+            return nullptr;
+        }
+
+        const long long position = elementStart - _segment->m_start;
+
+        if (id == libwebm::kMkvCluster && position > lastPosition) {
+            return _segment->FindOrPreloadCluster(position);
+        }
+
+        pos += size;
+    }
+
+    return nullptr;
 }
 
 /// The Cues index, parsing it on demand.
@@ -465,9 +455,10 @@ static long long MKVCuesOffsetInSeekHead(mkvparser::Segment *segment,
             _cluster = next;
 
             const mkvparser::BlockEntry *entry = nullptr;
+            const long status = _cluster->GetFirst(entry);
 
-            if (_cluster->GetFirst(entry) < 0) {
-                self.failure = MKVMakeError(MKVErrorMalformedSegment, _url, @"Failed to read a cluster.");
+            if (status < 0) {
+                [self stopWithStatus:status reason:@"Failed to read a cluster."];
                 return nil;
             }
 
@@ -484,9 +475,10 @@ static long long MKVCuesOffsetInSeekHead(mkvparser::Segment *segment,
 
         if (block == nullptr || _frameIndex >= block->GetFrameCount()) {
             const mkvparser::BlockEntry *next = nullptr;
+            const long status = _cluster->GetNext(_blockEntry, next);
 
-            if (_cluster->GetNext(_blockEntry, next) < 0) {
-                self.failure = MKVMakeError(MKVErrorMalformedSegment, _url, @"Failed to advance a cluster.");
+            if (status < 0) {
+                [self stopWithStatus:status reason:@"Failed to advance a cluster."];
                 return nil;
             }
 
@@ -502,6 +494,12 @@ static long long MKVCuesOffsetInSeekHead(mkvparser::Segment *segment,
 
         const mkvparser::Block::Frame &frame = block->GetFrame(_frameIndex);
         _frameIndex++;
+
+        // The block the cut runs through.
+        if (_isTruncated && frame.pos + frame.len > _fileLength) {
+            _finished = YES;
+            return nil;
+        }
 
         NSMutableData *data = [NSMutableData dataWithLength:(NSUInteger)frame.len];
 
@@ -536,6 +534,17 @@ static long long MKVCuesOffsetInSeekHead(mkvparser::Segment *segment,
                                  durationNanoseconds:defaultDuration
                                           isKeyframe:block->IsKey()];
     }
+}
+
+/// Ends the walk on a parser status: data running out in a truncated file is its clean end, and
+/// anything else is a failure.
+- (void)stopWithStatus:(long)status reason:(NSString *)reason {
+    if (_isTruncated && status == mkvparser::E_BUFFER_NOT_FULL) {
+        _finished = YES;
+        return;
+    }
+
+    self.failure = MKVMakeError(MKVErrorMalformedSegment, _url, reason);
 }
 
 @end

@@ -26,6 +26,10 @@ MKVSegmentDescription *_Nullable MKVMakeSegmentDescription(mkvparser::Segment *s
                                                            NSURL *url,
                                                            NSError **error);
 
+/// The segment-relative position of the `Cues` element reachable from the SeekHead at
+/// `seekHeadOffset`, following nested SeekHeads up to a fixed depth, or -1.
+long long MKVCuesOffsetInSeekHead(mkvparser::Segment *segment, long long seekHeadOffset, int depth);
+
 @interface MKVTrackDescription ()
 - (instancetype)initWithTrack:(const mkvparser::Track *)track;
 @end
