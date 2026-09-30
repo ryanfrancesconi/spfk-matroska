@@ -46,11 +46,12 @@ public final class MatroskaFrameReader {
     /// a poster frame from the middle of a feature film affordable.
     ///
     /// Frames for *every* track keep arriving afterwards, so a caller wanting one track filters as
-    /// before. The track has to be named because a keyframe of one lands mid-GOP for another.
+    /// before. The track has to be named because a keyframe of one lands mid-GOP for another; when
+    /// no cue point names it, another track's is used and its frames resume at its next keyframe.
     ///
     /// A time before the start or past the end of what nanoseconds can express is clamped to it.
     ///
-    /// - Throws: ``MatroskaError/noSeekIndex(_:)`` when the file has no index for that track, and
+    /// - Throws: ``MatroskaError/noSeekIndex(_:)`` when the file has no index, and
     ///   ``MatroskaError/invalidTimestamp(_:)`` for a time that is not finite.
     public func seek(to timestamp: TimeInterval, trackNumber: Int) throws {
         guard timestamp.isFinite else {

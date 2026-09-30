@@ -47,6 +47,10 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
 
     BOOL _finished;
     NSURL *_url;
+
+    // After a seek through another track's cue point, the track whose frames are dropped until its
+    // next keyframe, or 0.
+    long long _awaitingKeyframeTrack;
     NSDictionary<NSNumber *, NSNumber *> *_defaultDurations;
     NSDictionary<NSNumber *, NSData *> *_strippedHeaders;
 
@@ -399,8 +403,9 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
         // at the beginning of that. `Cues::GetBlock` is not usable here: it matches a block by
         // timecode *and* track within the cluster, which succeeds or fails depending on how the
         // cue's own track happens to be laid out -- on a two-hour file four positions in ten came
-        // back empty. Everything in the cluster is at or before the cue point's time, so nothing
-        // this track needs is skipped.
+        // back empty. The cluster starts at or before the chosen cue, which is at or before the
+        // target, but need not start on one of this track's keyframes, so the walk skips ahead to
+        // the next.
         const mkvparser::Cluster *cluster = _segment->FindOrPreloadCluster(trackPosition->m_pos);
 
         if (cluster == nullptr || cluster->EOS()) {
@@ -438,6 +443,7 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
 
     _frameIndex = 0;
     _finished = NO;
+    _awaitingKeyframeTrack = usedForeignTrack ? trackNumber : 0;
     self.failure = nil;
 
     return YES;
@@ -506,6 +512,14 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
         }
 
         const long long trackNumber = block->GetTrackNumber();
+
+        if (trackNumber == _awaitingKeyframeTrack) {
+            if (!block->IsKey()) {
+                continue;
+            }
+
+            _awaitingKeyframeTrack = 0;
+        }
 
         // Header stripping stores every frame without a prefix the track records once.
         NSData *strippedHeader = _strippedHeaders[@(trackNumber)];

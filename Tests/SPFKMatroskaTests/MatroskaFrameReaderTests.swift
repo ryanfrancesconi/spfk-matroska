@@ -219,3 +219,38 @@ final class MatroskaFrameReaderTests {
         #expect(try firstVideoFrame(afterSeekingTo: -1) == firstVideoFrame(afterSeekingTo: 0))
     }
 }
+
+// MARK: - Seeking through another track's index
+
+/// A file whose seek index names only its audio, with clusters that start between video keyframes.
+@Suite(.tags(.file), .serialized)
+final class MatroskaForeignCueSeekTests {
+    private let file = MatroskaTestFile(
+        tracks: [
+            .video(number: 1, uid: 1, codecID: "V_TEST"),
+            .pcm(number: 2, uid: 2),
+        ],
+        clusters: (0 ..< 4).map { index in
+            MatroskaTestFile.Cluster(timecode: UInt64(index) * 100, blocks: [
+                .init(track: 1, keyframe: index.isMultiple(of: 2), frames: [Data([1, UInt8(index)])]),
+                .init(track: 2, frames: [Data([2, UInt8(index), 0, 0])]),
+            ])
+        },
+        cues: (0 ..< 4).map { .init(time: UInt64($0) * 100, track: 2, clusterIndex: $0) }
+    )
+
+    @Test func aVideoSeekResumesAtTheNextKeyframe() throws {
+        let url = try file.writeTemporary()
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let reader = try MatroskaFrameReader(url: url)
+        try reader.seek(to: 0.15, trackNumber: 1)
+
+        let frames = try reader.allFrames()
+        let firstVideo = try #require(frames.first { $0.trackNumber == 1 })
+
+        #expect(firstVideo.isKeyframe)
+        #expect(firstVideo.timestamp == 0.2)
+        #expect(frames.contains { $0.trackNumber == 2 && $0.timestamp == 0.1 })
+    }
+}

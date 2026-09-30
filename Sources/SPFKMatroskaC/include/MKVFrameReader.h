@@ -50,7 +50,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// caller that wants only one track filters as it did before. Seeking to a keyframe of one track
 /// lands mid-GOP for another, which is why the track has to be named.
 ///
-/// Returns `NO` when the file carries no index, or none for that track.
+/// Returns `NO` when the file carries no index. When no cue point names the track, another track's
+/// cue point is used and this track's frames resume at its next keyframe.
 - (BOOL)seekToTimeNanoseconds:(long long)timeNanoseconds
                   trackNumber:(long long)trackNumber
                         error:(NSError **)error;
