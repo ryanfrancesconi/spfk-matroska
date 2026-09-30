@@ -32,6 +32,10 @@ long long MKVCuesOffsetInSeekHead(mkvparser::Segment *segment, long long seekHea
 
 @interface MKVTrackDescription ()
 - (instancetype)initWithTrack:(const mkvparser::Track *)track;
+
+/// The bytes header stripping removed from the front of every frame, or nil when the track
+/// declares no header stripping it can undo.
+@property (nonatomic, readonly, copy, nullable) NSData *strippedHeader;
 @end
 
 @interface MKVSegmentDescription ()

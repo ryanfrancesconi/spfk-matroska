@@ -48,6 +48,7 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
     BOOL _finished;
     NSURL *_url;
     NSDictionary<NSNumber *, NSNumber *> *_defaultDurations;
+    NSDictionary<NSNumber *, NSData *> *_strippedHeaders;
 
     // A truncated file's last cluster, which libwebm reports as empty and so never loads.
     long long _fileLength;
@@ -116,12 +117,15 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
     // Cached because a frame's duration comes from its track, and looking it up per frame would
     // walk the track list for every one of them.
     NSMutableDictionary<NSNumber *, NSNumber *> *durations = [NSMutableDictionary dictionary];
+    NSMutableDictionary<NSNumber *, NSData *> *strippedHeaders = [NSMutableDictionary dictionary];
 
     for (MKVTrackDescription *track in description.tracks) {
         durations[@(track.number)] = @(track.defaultDuration);
+        strippedHeaders[@(track.number)] = track.strippedHeader;
     }
 
     _defaultDurations = durations;
+    _strippedHeaders = strippedHeaders;
 
     return self;
 }
@@ -501,19 +505,28 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
             return nil;
         }
 
-        NSMutableData *data = [NSMutableData dataWithLength:(NSUInteger)frame.len];
+        const long long trackNumber = block->GetTrackNumber();
+
+        // Header stripping stores every frame without a prefix the track records once.
+        NSData *strippedHeader = _strippedHeaders[@(trackNumber)];
+        const NSUInteger prefixLength = strippedHeader.length;
+
+        NSMutableData *data = [NSMutableData dataWithLength:prefixLength + (NSUInteger)frame.len];
 
         if (data == nil) {
             self.failure = MKVMakeError(MKVErrorMalformedSegment, _url, @"Frame length is not readable.");
             return nil;
         }
 
-        if (frame.Read(_reader, (unsigned char *)data.mutableBytes) < 0) {
+        if (prefixLength > 0) {
+            memcpy(data.mutableBytes, strippedHeader.bytes, prefixLength);
+        }
+
+        if (frame.Read(_reader, (unsigned char *)data.mutableBytes + prefixLength) < 0) {
             self.failure = MKVMakeError(MKVErrorMalformedSegment, _url, @"Failed to read frame data.");
             return nil;
         }
 
-        const long long trackNumber = block->GetTrackNumber();
         const long long defaultDuration = _defaultDurations[@(trackNumber)].longLongValue;
 
         // **Laced frames must be spread across the block's span, not stacked on its timestamp.**

@@ -74,6 +74,32 @@ NSString *_Nullable MKVStringOrNil(const char *_Nullable value) {
     return [NSString stringWithUTF8String:value] ?: MKVDecodeUTF8Lossily(value);
 }
 
+/// `ContentCompAlgo` for header stripping.
+static const unsigned long long MKVContentCompAlgoHeaderStripping = 3;
+
+/// The stripped bytes, when header stripping of the frames is the track's only encoding.
+static NSData *_Nullable MKVStrippedHeader(const mkvparser::Track *track) {
+    if (track->GetContentEncodingCount() != 1) {
+        return nil;
+    }
+
+    const mkvparser::ContentEncoding *encoding = track->GetContentEncodingByIndex(0);
+
+    if (encoding == nullptr || encoding->GetEncryptionCount() != 0 || encoding->GetCompressionCount() != 1 ||
+        encoding->encoding_scope() != 1) {
+        return nil;
+    }
+
+    const mkvparser::ContentEncoding::ContentCompression *compression = encoding->GetCompressionByIndex(0);
+
+    if (compression == nullptr || compression->algo != MKVContentCompAlgoHeaderStripping ||
+        compression->settings == nullptr || compression->settings_len <= 0) {
+        return nil;
+    }
+
+    return [NSData dataWithBytes:compression->settings length:(NSUInteger)compression->settings_len];
+}
+
 @implementation MKVTrackDescription
 
 - (instancetype)initWithTrack:(const mkvparser::Track *)track {
@@ -103,6 +129,8 @@ NSString *_Nullable MKVStringOrNil(const char *_Nullable value) {
     if (codecPrivate != nullptr && codecPrivateSize > 0) {
         _codecPrivate = [NSData dataWithBytes:codecPrivate length:codecPrivateSize];
     }
+
+    _strippedHeader = MKVStrippedHeader(track);
 
     switch (track->GetType()) {
     case mkvparser::Track::kVideo: {
