@@ -288,6 +288,19 @@ struct MatroskaFilmstripTests {
         }
     }
 
+    /// A failed position is left blank and the pictures already decoded are kept.
+    @Test func aFailureAtOneTimestampKeepsTheOthers() throws {
+        var delivered: [TimeInterval] = []
+
+        let images = try MatroskaVideoDecoder.cgImages(url: mkv, at: [0.5, .infinity]) { timestamp, _ in
+            delivered.append(timestamp)
+        }
+
+        #expect(images[0.5] != nil)
+        #expect(images[.infinity] == nil)
+        #expect(delivered == [0.5])
+    }
+
     /// Different points in the file must give different pictures — the failure this guards is a
     /// strip of one frame repeated, which a count check alone would pass.
     @Test func framesAtDifferentTimesDiffer() throws {

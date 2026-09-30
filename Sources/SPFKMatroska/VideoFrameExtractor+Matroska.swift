@@ -15,7 +15,8 @@ public extension MatroskaVideoDecoder {
     ///
     /// Keyed by the *requested* timestamp rather than the frame's own, so an evenly spaced request
     /// comes back evenly spaced and a filmstrip stays visually uniform. A timestamp that yields no
-    /// picture is absent rather than zero — callers already draw a gap for a missing frame.
+    /// picture, or whose seek or decode fails, is absent rather than zero — callers already draw a
+    /// gap for a missing frame. Only failing to open the file throws.
     ///
     /// A file with no index still fills the strip, by decoding on to each target: seeking is what
     /// is unavailable, not reading. This is what makes the ascending order a requirement.
@@ -37,25 +38,34 @@ public extension MatroskaVideoDecoder {
 
         var images: [TimeInterval: CGImage] = [:]
         var canSeek = true
+        var hasLoggedFailure = false
 
         for timestamp in timestamps.sorted() {
-            if canSeek {
-                do {
-                    try decoder.seek(to: timestamp)
-                } catch MatroskaError.noSeekIndex {
-                    // Asked once. Every later seek fails the same way and the walk below reaches an
-                    // ascending target without one.
-                    canSeek = false
+            do {
+                if canSeek {
+                    do {
+                        try decoder.seek(to: timestamp)
+                    } catch MatroskaError.noSeekIndex {
+                        // Asked once. Every later seek fails the same way and the walk below reaches
+                        // an ascending target without one.
+                        canSeek = false
+                    }
+                }
+
+                guard let frame = try decoder.frame(atOrAfter: timestamp) else { break }
+                guard let image = frame.cgImage else { continue }
+
+                let scaled = maximumSize.flatMap { image.scaledPreservingAspect(to: $0) } ?? image
+
+                images[timestamp] = scaled
+                onImage?(timestamp, scaled)
+
+            } catch {
+                if !hasLoggedFailure {
+                    hasLoggedFailure = true
+                    Log.error("Failed to extract a Matroska frame at \(timestamp) from \(url.lastPathComponent)", error)
                 }
             }
-
-            guard let frame = try decoder.frame(atOrAfter: timestamp) else { break }
-            guard let image = frame.cgImage else { continue }
-
-            let scaled = maximumSize.flatMap { image.scaledPreservingAspect(to: $0) } ?? image
-
-            images[timestamp] = scaled
-            onImage?(timestamp, scaled)
         }
 
         return images
