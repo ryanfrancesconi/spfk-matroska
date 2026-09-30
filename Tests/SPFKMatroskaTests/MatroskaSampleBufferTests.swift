@@ -225,7 +225,8 @@ private extension MatroskaTrack {
             name: nil,
             language: nil,
             codecPrivate: nil,
-            defaultFrameDurationNanoseconds: nil
+            defaultFrameDurationNanoseconds: nil,
+            hasUnsupportedContentEncoding: false
         )
     }
 }

@@ -43,6 +43,10 @@ typedef NS_ENUM(NSInteger, MKVTrackType) {
 /// Nanoseconds per frame, or 0 when the file does not state it.
 @property(nonatomic, readonly) unsigned long long defaultDuration;
 
+/// Whether the track declares its frames compressed or encrypted in a way the frame reader does not
+/// undo. Header stripping of the frames alone is undone.
+@property(nonatomic, readonly) BOOL hasUnsupportedContentEncoding;
+
 // MARK: - Video, zero unless type == MKVTrackTypeVideo
 
 @property(nonatomic, readonly) long long pixelWidth;

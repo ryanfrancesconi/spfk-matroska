@@ -16,6 +16,10 @@ public extension MatroskaTrack {
     ///
     /// - Throws: ``MatroskaSampleBufferError``.
     func makeAudioStreamBasicDescription() throws -> AudioStreamBasicDescription {
+        guard hasUnsupportedContentEncoding == false else {
+            throw MatroskaSampleBufferError.unsupportedContentEncoding(codecID: codecID)
+        }
+
         guard case let .audio(parameters) = kind, parameters.sampleRate > 0, parameters.channelCount > 0 else {
             throw MatroskaSampleBufferError.missingAudioParameters
         }

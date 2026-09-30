@@ -4,6 +4,8 @@
 
 #include <string>
 
+#import <common/webmids.h>
+
 /// Replaces each maximal ill-formed subsequence with U+FFFD, the rule Swift's
 /// `String(decoding:as:)` follows.
 static NSString *MKVDecodeUTF8Lossily(const char *value) {
@@ -100,6 +102,50 @@ static NSData *_Nullable MKVStrippedHeader(const mkvparser::Track *track) {
     return [NSData dataWithBytes:compression->settings length:(NSUInteger)compression->settings_len];
 }
 
+/// How many `ContentEncoding` elements the track entry states, or -1 when it cannot be walked.
+/// libwebm drops an encoding it fails to parse, which must not read as no encoding.
+static long long MKVDeclaredContentEncodingCount(const mkvparser::Track *track) {
+    mkvparser::IMkvReader *reader = track->m_pSegment->m_pReader;
+    const long long stop = track->m_element_start + track->m_element_size;
+
+    long long pos = track->m_element_start;
+    long long id = 0;
+    long long size = 0;
+
+    if (mkvparser::ParseElementHeader(reader, pos, stop, id, size) < 0) {
+        return -1;
+    }
+
+    long long count = 0;
+
+    while (pos < stop) {
+        if (mkvparser::ParseElementHeader(reader, pos, stop, id, size) < 0) {
+            return -1;
+        }
+
+        if (id != libwebm::kMkvContentEncodings) {
+            pos += size;
+            continue;
+        }
+
+        const long long encodingsStop = pos + size;
+
+        while (pos < encodingsStop) {
+            if (mkvparser::ParseElementHeader(reader, pos, encodingsStop, id, size) < 0) {
+                return -1;
+            }
+
+            if (id == libwebm::kMkvContentEncoding) {
+                count++;
+            }
+
+            pos += size;
+        }
+    }
+
+    return count;
+}
+
 @implementation MKVTrackDescription
 
 - (instancetype)initWithTrack:(const mkvparser::Track *)track {
@@ -131,6 +177,11 @@ static NSData *_Nullable MKVStrippedHeader(const mkvparser::Track *track) {
     }
 
     _strippedHeader = MKVStrippedHeader(track);
+
+    const long long declaredEncodings = MKVDeclaredContentEncodingCount(track);
+    const long long parsedEncodings = (long long)track->GetContentEncodingCount();
+    _hasUnsupportedContentEncoding = declaredEncodings != parsedEncodings ||
+                                     (parsedEncodings > 0 && _strippedHeader == nil);
 
     switch (track->GetType()) {
     case mkvparser::Track::kVideo: {

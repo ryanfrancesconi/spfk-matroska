@@ -39,7 +39,8 @@ final class MatroskaParameterRangeTests {
             name: nil,
             language: nil,
             codecPrivate: nil,
-            defaultFrameDurationNanoseconds: nil
+            defaultFrameDurationNanoseconds: nil,
+            hasUnsupportedContentEncoding: false
         )
 
         #expect(throws: MatroskaSampleBufferError.missingAudioParameters) {

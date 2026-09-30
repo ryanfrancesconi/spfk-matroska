@@ -135,6 +135,10 @@ public struct MatroskaTrack: Hashable, Sendable, Identifiable {
     /// `DefaultDuration` in nanoseconds — how long one frame lasts. `nil` when unstated.
     public let defaultFrameDurationNanoseconds: UInt64?
 
+    /// Whether the frames are stored compressed or encrypted in a way this package does not undo,
+    /// which makes the track undecodable. Header stripping is undone as the frames are read.
+    public let hasUnsupportedContentEncoding: Bool
+
     /// Frames per second, preferring the declared `FrameRate` and falling back to the reciprocal of
     /// ``defaultFrameDurationNanoseconds``. `nil` when the file states neither, which is normal for
     /// variable-frame-rate captures — the real rate is then only knowable by walking clusters.
@@ -186,6 +190,7 @@ extension MatroskaTrack {
         language = description.language ?? Self.defaultLanguage
         codecPrivate = description.codecPrivate
         defaultFrameDurationNanoseconds = description.defaultDuration > 0 ? description.defaultDuration : nil
+        hasUnsupportedContentEncoding = description.hasUnsupportedContentEncoding
 
         kind = switch description.type {
         case .video:

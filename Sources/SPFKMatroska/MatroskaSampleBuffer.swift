@@ -26,6 +26,9 @@ public enum MatroskaSampleBufferError: Error, Equatable, Sendable {
 
     /// Core Media refused the description or the buffer. Carries its `OSStatus`.
     case coreMediaFailure(OSStatus)
+
+    /// The track stores its frames compressed or encrypted, which this package does not undo.
+    case unsupportedContentEncoding(codecID: String)
 }
 
 // MARK: - Format description
@@ -102,6 +105,10 @@ public extension MatroskaTrack {
     ///
     /// - Throws: ``MatroskaSampleBufferError``.
     func makeFormatDescription() throws -> CMVideoFormatDescription {
+        guard hasUnsupportedContentEncoding == false else {
+            throw MatroskaSampleBufferError.unsupportedContentEncoding(codecID: codecID)
+        }
+
         // Every path that decodes video builds its description here — the decoder, the sample
         // buffer reader behind the display layer, and the decodability probe — so registering here
         // is the one place a new caller cannot forget. See ``SupplementalVideoDecoders``.
