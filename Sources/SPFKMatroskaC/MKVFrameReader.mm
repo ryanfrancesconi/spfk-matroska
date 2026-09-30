@@ -551,8 +551,21 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
         // so nothing else would space them.
         long long timestamp = block->GetTime(_cluster);
 
+        // libwebm reports -1 both for a time before the segment starts and for one that overflows
+        // nanoseconds; only the second is malformed.
+        if (timestamp < 0 && block->GetTimeCode(_cluster) >= 0) {
+            self.failure = MKVMakeError(MKVErrorMalformedSegment, _url, @"Block time overflows.");
+            return nil;
+        }
+
         if (laceIndex > 0 && defaultDuration > 0) {
-            timestamp += (long long)laceIndex * defaultDuration;
+            long long offset = 0;
+
+            if (__builtin_mul_overflow((long long)laceIndex, defaultDuration, &offset) ||
+                __builtin_add_overflow(timestamp, offset, &timestamp)) {
+                self.failure = MKVMakeError(MKVErrorMalformedSegment, _url, @"Block time overflows.");
+                return nil;
+            }
         }
 
         return [[MKVFrame alloc] initWithTrackNumber:trackNumber
