@@ -42,7 +42,8 @@ public struct MatroskaTrack: Hashable, Sendable, Identifiable {
         }
     }
 
-    /// Video parameters, as the file states them. Nothing here is derived or corrected.
+    /// Video parameters, as the file states them. Nothing here is derived, and only a size Core
+    /// Media cannot take is corrected, to 0.
     public struct VideoParameters: Hashable, Sendable {
         /// The encoded frame size — what a decoder produces.
         public let pixelWidth: Int
@@ -61,6 +62,24 @@ public struct MatroskaTrack: Hashable, Sendable, Identifiable {
         /// The `FrameRate` element. Deprecated in Matroska and omitted by most muxers, so this is
         /// usually `nil` — ``MatroskaTrack/frameRate`` derives the real answer.
         public let declaredFrameRate: Double?
+
+        /// A pixel dimension beyond what Core Media accepts reads as 0.
+        init(
+            pixelWidth: Int,
+            pixelHeight: Int,
+            displayWidth: Int,
+            displayHeight: Int,
+            displayUnit: DisplayUnit,
+            declaredFrameRate: Double?
+        ) {
+            let pixelRange = 0 ... Int(Int32.max)
+            self.pixelWidth = pixelRange.contains(pixelWidth) ? pixelWidth : 0
+            self.pixelHeight = pixelRange.contains(pixelHeight) ? pixelHeight : 0
+            self.displayWidth = displayWidth
+            self.displayHeight = displayHeight
+            self.displayUnit = displayUnit
+            self.declaredFrameRate = declaredFrameRate
+        }
     }
 
     /// Audio parameters, as the file states them.
@@ -70,6 +89,14 @@ public struct MatroskaTrack: Hashable, Sendable, Identifiable {
 
         /// `BitDepth`, `nil` for compressed codecs that do not state one.
         public let bitDepth: Int?
+
+        /// A rate or channel count beyond what Core Audio accepts reads as 0. The channel bound keeps
+        /// a frame of the widest sample, 64 bits, within `UInt32`.
+        init(sampleRate: Double, channelCount: Int, bitDepth: Int?) {
+            self.sampleRate = (0 ... Double(Int32.max)).contains(sampleRate) ? sampleRate : 0
+            self.channelCount = (0 ... Int(UInt32.max / 8)).contains(channelCount) ? channelCount : 0
+            self.bitDepth = bitDepth
+        }
     }
 
     /// The `TrackNumber` blocks reference. One-based and not necessarily contiguous, so it is an
