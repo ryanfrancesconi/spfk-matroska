@@ -44,6 +44,15 @@ public final class MatroskaVideoDecoder {
     private let reader: MatroskaFrameReader
     private let session: VTDecompressionSession
 
+    /// Passed to every decode. `_DoNotOutputFrame` stands in for a stream that decodes to nothing.
+    var decodeFlags: VTDecodeFrameFlags = []
+
+    /// Consecutive decodes without a picture after which the stream is taken to produce none.
+    private static let maximumConsecutiveHiddenFrames = 300
+
+    private var hasDecodedFrame = false
+    private var hasProducedPicture = false
+
     /// Opens `url` and prepares to decode its first video track.
     ///
     /// - Throws: ``MatroskaError``, ``MatroskaSampleBufferError``, or
@@ -85,8 +94,12 @@ public final class MatroskaVideoDecoder {
     /// Decodes the next picture, or `nil` at the end of the track.
     ///
     /// Frames that decode to nothing — a stream can legitimately contain them — are skipped rather
-    /// than returned as a gap, so a caller always gets a picture or the end.
+    /// than returned as a gap, so a caller always gets a picture or the end. A stream that decodes
+    /// to no pictures at all throws ``MatroskaVideoDecoderError/decodeFailed(_:status:)`` with
+    /// `noErr` instead of reading as empty.
     public func nextImage() throws -> MatroskaVideoFrame? {
+        var hiddenInARow = 0
+
         while let frame = try nextVideoFrame() {
             let sampleBuffer = try frame.makeSampleBuffer(formatDescription: formatDescription)
 
@@ -98,7 +111,7 @@ public final class MatroskaVideoDecoder {
             let status = VTDecompressionSessionDecodeFrame(
                 session,
                 sampleBuffer: sampleBuffer,
-                flags: [],
+                flags: decodeFlags,
                 infoFlagsOut: nil
             ) { status, _, imageBuffer, _, _ in
                 result.status = status
@@ -109,11 +122,24 @@ public final class MatroskaVideoDecoder {
                 throw MatroskaVideoDecoderError.decodeFailed(url, status: result.status == noErr ? status : result.status)
             }
 
+            hasDecodedFrame = true
+
             guard let image = result.imageBuffer else {
+                hiddenInARow += 1
+
+                if hiddenInARow >= Self.maximumConsecutiveHiddenFrames {
+                    throw MatroskaVideoDecoderError.decodeFailed(url, status: noErr)
+                }
+
                 continue
             }
 
+            hasProducedPicture = true
             return MatroskaVideoFrame(image: image, timestamp: frame.timestamp, isKeyframe: frame.isKeyframe)
+        }
+
+        if hasDecodedFrame, !hasProducedPicture {
+            throw MatroskaVideoDecoderError.decodeFailed(url, status: noErr)
         }
 
         return nil

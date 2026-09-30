@@ -111,6 +111,16 @@ final class MatroskaVideoDecoderTests {
         #expect(abs((sorted.last ?? 0) - 2.015) < 0.001)
     }
 
+    /// A stream the system decoder accepts and produces nothing for is an error, not an empty track.
+    @Test func aStreamThatEmitsNoPicturesThrows() throws {
+        let decoder = try MatroskaVideoDecoder(url: mkv)
+        decoder.decodeFlags = ._DoNotOutputFrame
+
+        #expect(throws: MatroskaVideoDecoderError.decodeFailed(mkv, status: noErr)) {
+            try decoder.nextImage()
+        }
+    }
+
     /// VP9 decodes, which needs ``SupplementalVideoDecoders`` to have registered — the decoder is
     /// not in a process that never asked for it, and its absence reads exactly like a machine with
     /// no VP9 hardware.
