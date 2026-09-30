@@ -185,4 +185,37 @@ final class MatroskaFrameReaderTests {
         #expect(afterEnd == nil)
         #expect(afterEndAgain == nil)
     }
+
+    // MARK: - Seek times
+
+    private func firstVideoFrame(afterSeekingTo time: TimeInterval) throws -> MatroskaFrame? {
+        let reader = try MatroskaFrameReader(url: mkv)
+        try reader.seek(to: time, trackNumber: Self.videoTrack)
+
+        while let frame = try reader.nextFrame() {
+            if frame.trackNumber == Self.videoTrack { return frame }
+        }
+
+        return nil
+    }
+
+    @Test func seekingToANonFiniteTimeThrows() throws {
+        let reader = try MatroskaFrameReader(url: mkv)
+
+        for time in [TimeInterval.nan, .infinity, -.infinity] {
+            #expect(throws: MatroskaError.invalidTimestamp(mkv)) {
+                try reader.seek(to: time, trackNumber: Self.videoTrack)
+            }
+        }
+    }
+
+    @Test func seekingFarPastTheEndClampsRatherThanTrapping() throws {
+        let duration = try #require(try MatroskaFile(url: mkv).duration)
+
+        #expect(try firstVideoFrame(afterSeekingTo: 1e12) == firstVideoFrame(afterSeekingTo: duration))
+    }
+
+    @Test func seekingToANegativeTimeStartsAtTheBeginning() throws {
+        #expect(try firstVideoFrame(afterSeekingTo: -1) == firstVideoFrame(afterSeekingTo: 0))
+    }
 }

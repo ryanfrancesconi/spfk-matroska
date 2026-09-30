@@ -19,6 +19,9 @@ public enum MatroskaError: Error, Equatable, Sendable {
 
     /// The file carries no `Cues` index, so a seek would cost a scan rather than a lookup.
     case noSeekIndex(URL)
+
+    /// A seek was asked for a time that is not a number, or is infinite.
+    case invalidTimestamp(URL)
 }
 
 // MARK: - Bridging
@@ -60,6 +63,9 @@ extension MatroskaError: LocalizedError {
 
         case let .noSeekIndex(url):
             "\(url.lastPathComponent) has no seek index"
+
+        case let .invalidTimestamp(url):
+            "Cannot seek \(url.lastPathComponent) to a time that is not finite"
         }
     }
 }

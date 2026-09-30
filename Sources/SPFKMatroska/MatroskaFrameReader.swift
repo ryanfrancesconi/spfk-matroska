@@ -48,9 +48,18 @@ public final class MatroskaFrameReader {
     /// Frames for *every* track keep arriving afterwards, so a caller wanting one track filters as
     /// before. The track has to be named because a keyframe of one lands mid-GOP for another.
     ///
-    /// - Throws: ``MatroskaError/noSeekIndex(_:)`` when the file has no index for that track.
+    /// A time before the start or past the end of what nanoseconds can express is clamped to it.
+    ///
+    /// - Throws: ``MatroskaError/noSeekIndex(_:)`` when the file has no index for that track, and
+    ///   ``MatroskaError/invalidTimestamp(_:)`` for a time that is not finite.
     public func seek(to timestamp: TimeInterval, trackNumber: Int) throws {
-        let nanoseconds = Int64((timestamp * 1_000_000_000).rounded())
+        guard timestamp.isFinite else {
+            throw MatroskaError.invalidTimestamp(url)
+        }
+
+        // `Double(Int64.max)` rounds up to 2^63, which is itself out of range.
+        let scaled = (timestamp * 1_000_000_000).rounded()
+        let nanoseconds: Int64 = scaled <= 0 ? 0 : scaled >= Double(Int64.max) ? .max : Int64(scaled)
 
         do {
             try reader.seek(toTimeNanoseconds: nanoseconds, trackNumber: Int64(trackNumber))
