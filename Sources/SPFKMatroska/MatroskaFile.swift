@@ -72,7 +72,30 @@ public struct MatroskaFile: Hashable, Sendable {
         duration = description.durationNanoseconds > 0
             ? TimeInterval(description.durationNanoseconds) / 1_000_000_000
             : nil
-        tracks = description.tracks.map(MatroskaTrack.init)
+        tracks = Self.withDistinctUIDs(description.tracks.map(MatroskaTrack.init))
+    }
+
+    /// Gives a track whose `TrackUID` is absent or shared with another track an identity from its
+    /// number, so every track can be selected on its own.
+    private static func withDistinctUIDs(_ tracks: [MatroskaTrack]) -> [MatroskaTrack] {
+        let counts = Dictionary(tracks.map { ($0.uid, 1) }, uniquingKeysWith: +)
+
+        return tracks.map { track in
+            guard track.uid == 0 || counts[track.uid, default: 0] > 1 else { return track }
+
+            return MatroskaTrack(
+                number: track.number,
+                uid: UInt64(truncatingIfNeeded: track.number) | 1 << 63,
+                kind: track.kind,
+                codecID: track.codecID,
+                codecName: track.codecName,
+                name: track.name,
+                language: track.language,
+                codecPrivate: track.codecPrivate,
+                defaultFrameDurationNanoseconds: track.defaultFrameDurationNanoseconds,
+                hasUnsupportedContentEncoding: track.hasUnsupportedContentEncoding
+            )
+        }
     }
 }
 

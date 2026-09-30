@@ -78,6 +78,29 @@ final class MatroskaDualAudioTests {
         #expect(Set(uids).count == file.tracks.count)
     }
 
+    /// Old or malformed files state no `TrackUID`, or the same one twice; every track must still be
+    /// selectable on its own.
+    @Test(arguments: [nil, UInt64(7)])
+    func tracksWithoutDistinctUIDsGetDistinctIdentifiers(uid: UInt64?) throws {
+        let file = MatroskaTestFile(
+            tracks: [.pcm(number: 1, uid: uid), .pcm(number: 2, uid: uid)],
+            clusters: [.init(timecode: 0, blocks: [
+                .init(track: 1, frames: [Data(repeating: 1, count: 4)]),
+                .init(track: 2, frames: [Data(repeating: 2, count: 4)]),
+            ])]
+        )
+
+        let fileURL = try file.writeTemporary(pathExtension: "mka")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        let matroska = try MatroskaFile(url: fileURL)
+        let ids = matroska.audioTrackDescriptions.map(\.id)
+
+        #expect(ids.count == 2)
+        #expect(Set(ids).count == 2)
+        #expect(ids.compactMap { matroska.audioTrack(id: $0)?.number } == [1, 2])
+    }
+
     /// The picker's rows, from the container's own `Name`/`Language`.
     @Test func describesAudioTracksNeutrally() throws {
         let file = try MatroskaFile(url: url)

@@ -105,7 +105,8 @@ public struct MatroskaTrack: Hashable, Sendable, Identifiable {
 
     /// `TrackUID` — identity that survives a remux, where ``number`` is positional and does not.
     /// What a selection persisted across sessions is keyed on; ``number`` is what a reader is
-    /// opened with.
+    /// opened with. A track stating none, or one another track also states, gets
+    /// `number | 1 << 63`, which survives only as long as the file is not remuxed.
     public let uid: UInt64
 
     public var id: Int { number }
