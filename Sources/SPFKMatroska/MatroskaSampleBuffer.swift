@@ -225,8 +225,7 @@ public extension MatroskaTrack {
         0, 0,
     ])
 
-    /// Read from the `kCMVideoCodecType_*` constants rather than transcribed, same as
-    /// ``codecFourCC``.
+    /// Maps ``codecFourCC``'s strings to their `kCMVideoCodecType_*` constants.
     private static func codecType(for fourCC: String) -> CMVideoCodecType? {
         switch fourCC {
         case "avc1": kCMVideoCodecType_H264

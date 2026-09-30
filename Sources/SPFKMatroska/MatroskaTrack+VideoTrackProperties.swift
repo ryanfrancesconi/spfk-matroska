@@ -12,7 +12,7 @@ extension MatroskaTrack {
     /// CoreMedia's four-character code for this track's codec, or `nil` for one with no equivalent.
     ///
     /// Matches `VideoTrackReader`'s `codec`, so the same stream reports the same string whichever
-    /// container carries it. Values are read from `kCMVideoCodecType_*`, not transcribed.
+    /// container carries it.
     public var codecFourCC: String? {
         switch codecID {
         case "V_MPEG4/ISO/AVC": "avc1"
@@ -74,7 +74,7 @@ extension MatroskaFile {
     /// 66ms, about two frames, on the fixture. Reported rather than left blank because it is a real
     /// measurement of the file and the number every other tool shows for a `.mkv`, and the field is
     /// display-only. **Anything that starts computing with it — a trim range, a seek bound — wants
-    /// the exact track duration instead**, which the frame layer can supply once it exists.
+    /// the exact track duration instead**, which `MatroskaFrameReader` can derive.
     public var videoTrackProperties: VideoTrackProperties? {
         guard var properties = videoTrack?.videoTrackProperties else {
             return nil

@@ -181,7 +181,7 @@ public final class MatroskaVideoDecoder {
     /// The container is identified by reading its EBML header rather than by extension, so there is
     /// no list here to fall out of step with the ones in `AudioFileType`.
     ///
-    /// Synchronous and not cheap — a seek plus one GOP. Call it off the main actor.
+    /// Synchronous and not cheap — a seek plus one keyframe decode. Call it off the main actor.
     public static func posterCGImage(url: URL) -> CGImage? {
         do {
             let duration = try MatroskaFile(url: url).duration ?? 0
@@ -202,22 +202,21 @@ public final class MatroskaVideoDecoder {
         }
     }
 
-    /// Repositions to the keyframe at or before `timestamp` and clears the decoder's state.
+    /// Repositions to the keyframe at or before `timestamp` and flushes the decoder's pending output.
     ///
     /// - Throws: ``MatroskaError/noSeekIndex(_:)`` when the file carries no index.
     public func seek(to timestamp: TimeInterval) throws {
         try reader.seek(to: timestamp, trackNumber: track.number)
 
-        // The session holds reference frames from wherever it was; a new GOP must not be decoded
-        // against them.
+        // Flush output still pending from the previous position.
         VTDecompressionSessionFinishDelayedFrames(session)
         VTDecompressionSessionWaitForAsynchronousFrames(session)
     }
 
-    /// One picture from `timestamp`, for a still preview.
+    /// The keyframe at or before `timestamp`, for a still preview.
     ///
-    /// Seeks first, so this costs an index lookup and one GOP rather than decoding everything up to
-    /// that point. Falls back to the first frame for a file with no index, because a picture from
+    /// Seeks first, so this costs an index lookup and one keyframe decode rather than decoding
+    /// everything up to that point. Falls back to the first frame for a file with no index, because a picture from
     /// the wrong place still beats a black rectangle.
     public static func cgImage(url: URL, at timestamp: TimeInterval) throws -> CGImage? {
         let decoder = try MatroskaVideoDecoder(url: url)

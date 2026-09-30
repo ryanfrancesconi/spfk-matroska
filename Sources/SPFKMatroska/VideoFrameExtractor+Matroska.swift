@@ -10,8 +10,7 @@ public extension MatroskaVideoDecoder {
     ///
     /// Opening per timestamp would cost a header parse and a decoder for every thumbnail on a
     /// filmstrip; this seeks within a single decoder instead. Timestamps are visited in ascending
-    /// order for the same reason — a seek forward within a loaded file is cheap, a seek backward
-    /// discards the decoder's reference frames.
+    /// order for the same reason: a seek forward within a loaded file is cheap.
     ///
     /// Keyed by the *requested* timestamp rather than the frame's own, so an evenly spaced request
     /// comes back evenly spaced and a filmstrip stays visually uniform. A timestamp that yields no
