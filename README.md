@@ -11,8 +11,8 @@ Matroska is absent from `AVURLAsset.audiovisualTypes()`, so AVFoundation cannot 
 layer AVFoundation is missing.
 
 **It vendors no codec**, deliberately. Container parsing has no patent surface; video and audio
-codecs are pool-licensed, and macOS already decodes H.264, HEVC, AV1, AAC, FLAC and Opus natively
-through VideoToolbox and AudioToolbox. So this package hands back compressed frames plus enough
+codecs are pool-licensed, and macOS decodes H.264, HEVC, AAC, FLAC and Opus natively (AV1 only
+where the hardware has a decoder) through VideoToolbox and AudioToolbox. So this package hands back compressed frames plus enough
 codec description to build a `CMFormatDescription`.
 
 `MatroskaVideoDecoder` drives VideoToolbox rather than implementing anything — the boundary is that
@@ -35,7 +35,7 @@ still reports resolution and codec through the same type as everything else. It 
 
 ## Frames
 
-`MatroskaFrameReader` walks a track's blocks and seeks by timestamp, handing back a `MatroskaFrame`
+`MatroskaFrameReader` walks every track's blocks, interleaved, and seeks by timestamp, handing back a `MatroskaFrame`
 with its data, timestamp and keyframe flag. `MatroskaSampleBufferReader` wraps those as
 `CMSampleBuffer`s — a `MatroskaSampleBatch` at a time — for an `AVSampleBufferDisplayLayer` or an
 `AVSampleBufferAudioRenderer`.
@@ -68,7 +68,7 @@ track instead of from a table.
 | target | holds |
 |---|---|
 | `SPFKMatroskaC` | the ObjC++ bridge over `mkvparser`'s C++ API |
-| `SPFKMatroska` | Swift value types (`MatroskaFile`, `MatroskaTrack`, `MatroskaError`) |
+| `SPFKMatroska` | Swift types: the file and track model, the frame and sample-buffer readers, the VideoToolbox decoder and the audio stream description |
 
 ObjC++ rather than Swift/C++ interop: `.interoperabilityMode(.Cxx)` propagates to every consumer,
 which is not a cost callers should pay for a container reader.
