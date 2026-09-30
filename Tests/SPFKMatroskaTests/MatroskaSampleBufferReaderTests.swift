@@ -150,10 +150,9 @@ struct MatroskaSampleBufferReaderTests {
     /// sound in TorchTag. Core Audio decodes Opus — it is in
     /// `kAudioFormatProperty_DecodeFormatIDs` — so no bundled library is involved.
     ///
-    /// **The tolerance this used to cover — an undescribable audio track being dropped rather than
-    /// failing the open — no longer has a committed fixture**, because every bundled Matroska now
-    /// carries a codec in the table. Vorbis is the remaining undescribable case and its fixture is
-    /// scratch. The behavior itself is unchanged in `MatroskaSampleBufferReader.init`.
+    /// An undescribable audio track is dropped rather than failing the open
+    /// (`MatroskaSampleBufferReader.init`); no bundled fixture carries one, since every bundled
+    /// Matroska's codec is in the table.
     @Test func theWebMOpusTrackIsDescribedAndDelivered() throws {
         let reader = try MatroskaSampleBufferReader(url: webm)
 

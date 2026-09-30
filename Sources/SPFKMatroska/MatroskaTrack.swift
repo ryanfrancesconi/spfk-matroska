@@ -121,12 +121,9 @@ public struct MatroskaTrack: Hashable, Sendable, Identifiable {
 
     /// `Language`, ISO-639-2.
     ///
-    /// **`eng` when the file states none**, which is the element's declared default in the Matroska
-    /// spec — so muxers omit it for English and write it only for everything else. libwebm applies
-    /// no default (its `Track::Info` initializes `language(NULL)` and fills it only from a present
-    /// element), which made an English track read as having no language at all while every other
-    /// track had one. ffmpeg applies the same default, which is why `ffprobe` shows `eng` for a
-    /// track this reader called `nil`.
+    /// **`eng` when the file states none**, the element's declared default in the Matroska spec, so
+    /// muxers omit it for English. libwebm applies no default (its `Track::Info` initializes
+    /// `language(NULL)`), so it is applied here, as ffmpeg does.
     public let language: String?
 
     /// `CodecPrivate` — the codec's out-of-band setup data, needed to build a format description.

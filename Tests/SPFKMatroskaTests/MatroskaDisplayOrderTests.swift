@@ -98,8 +98,8 @@ struct MatroskaDisplayOrderTests {
 /// The display path, which is the one that matters: `AVSampleBufferDisplayLayer` takes **compressed**
 /// sample buffers in decode order and schedules them by presentation timestamp itself.
 ///
-/// So the reordering the plan expected to have to write is the layer's job, not this package's, and
-/// the demuxer's stored order is already the order to enqueue in.
+/// So reordering is the layer's job, not this package's, and the demuxer's stored order is already
+/// the order to enqueue in.
 @MainActor
 @Suite(.tags(.file), .serialized)
 struct MatroskaDisplayLayerTests {
