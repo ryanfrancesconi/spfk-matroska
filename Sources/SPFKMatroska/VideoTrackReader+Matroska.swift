@@ -38,4 +38,17 @@ public extension VideoTrackReader {
             hasProtectedContent: result.hasProtectedContent
         )
     }
+
+    /// Whether a file typed as video by its extension held nothing any reader could use: no video
+    /// track, and neither AVFoundation nor the demuxer plays it.
+    ///
+    /// Only meaningful for a file that exists — a file on an unmounted volume fails every read, so
+    /// the caller decides whether a verdict may be recorded before asking.
+    static func isUnreadableVideo(
+        videoTrack: VideoTrackProperties?,
+        isAVPlayable: Bool,
+        isDecodable: Bool
+    ) -> Bool {
+        videoTrack == nil && !isAVPlayable && !isDecodable
+    }
 }
