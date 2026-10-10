@@ -251,6 +251,20 @@ struct MatroskaAudioStreamDescriptionTests {
         }
     }
 
+    // MARK: - E-AC-3
+
+    /// Enhanced AC-3 is a distinct Matroska CodecID from AC-3; without a table entry the sample
+    /// buffer reader drops the track and the file opens as video-only.
+    @Test func eac3MapsToEnhancedAC3() throws {
+        let track = MatroskaTrack.stub(codecID: "A_EAC3", bitDepth: nil)
+        let description = try track.makeAudioStreamBasicDescription()
+
+        #expect(description.mFormatID == kAudioFormatEnhancedAC3)
+        #expect(description.mFramesPerPacket == 1536)
+        #expect(track.isDecodable)
+        _ = try track.makeAudioFormatDescription()
+    }
+
     // MARK: - Decodability
 
     @Test func losslessTracksReportAsDecodable() throws {
