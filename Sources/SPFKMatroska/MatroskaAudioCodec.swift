@@ -6,12 +6,14 @@ import Foundation
 /// A Matroska audio `CodecID` macOS has a decoder for.
 ///
 /// Deliberately small: Matroska admits codecs macOS cannot decode, DTS and TrueHD among them, and
-/// a caller needs that to be an answer rather than silence. Shared by both consumers, since a codec
+/// a caller needs that to be an answer rather than silence. Enhanced AC-3 (`A_EAC3`) is included —
+/// Core Audio decodes it as `kAudioFormatEnhancedAC3`. Shared by both consumers, since a codec
 /// table with two copies drifts.
 public enum MatroskaAudioCodec: String, Sendable, CaseIterable {
     case aac = "A_AAC"
     case mp3 = "A_MPEG/L3"
     case ac3 = "A_AC3"
+    case eac3 = "A_EAC3"
     case flac = "A_FLAC"
     case opus = "A_OPUS"
     case pcmIntegerLittleEndian = "A_PCM/INT/LIT"
@@ -23,6 +25,7 @@ public enum MatroskaAudioCodec: String, Sendable, CaseIterable {
         case .aac: kAudioFormatMPEG4AAC
         case .mp3: kAudioFormatMPEGLayer3
         case .ac3: kAudioFormatAC3
+        case .eac3: kAudioFormatEnhancedAC3
         case .flac: kAudioFormatFLAC
         case .opus: kAudioFormatOpus
         case .pcmIntegerLittleEndian, .pcmIntegerBigEndian, .pcmFloat: kAudioFormatLinearPCM
@@ -35,12 +38,13 @@ public enum MatroskaAudioCodec: String, Sendable, CaseIterable {
     /// describes rather than this. **FLAC is zero because its figure belongs to the file rather than
     /// to the codec** — ``MatroskaTrack/audioFramesPerPacket`` reads it from STREAMINFO. **Opus is
     /// zero because it belongs to the packet**: each one states its own frame size in its TOC byte,
-    /// and a stream may mix 2.5 ms through 60 ms freely.
+    /// and a stream may mix 2.5 ms through 60 ms freely. E-AC-3 uses the common 6-block figure
+    /// (1536), matching AC-3; syncframes with fewer blocks are left for a later packet-level parse.
     public var framesPerPacket: UInt32 {
         switch self {
         case .aac: 1024
         case .mp3: 1152
-        case .ac3: 1536
+        case .ac3, .eac3: 1536
         case .flac, .opus, .pcmIntegerLittleEndian, .pcmIntegerBigEndian, .pcmFloat: 0
         }
     }
@@ -54,15 +58,15 @@ public enum MatroskaAudioCodec: String, Sendable, CaseIterable {
         case .pcmIntegerLittleEndian: .integer(isBigEndian: false)
         case .pcmIntegerBigEndian: .integer(isBigEndian: true)
         case .pcmFloat: .float
-        case .aac, .mp3, .ac3, .flac, .opus: nil
+        case .aac, .mp3, .ac3, .eac3, .flac, .opus: nil
         }
     }
 
     /// Whether the decoder takes this track's `CodecPrivate` as a magic cookie.
     ///
     /// For AAC that blob *is* the AudioSpecificConfig Core Audio wants, the same "stored verbatim"
-    /// property `avcC` has on the video side. MP3, AC-3 and PCM carry none. FLAC's STREAMINFO is
-    /// accepted but not needed: what a FLAC track decodes on is the source-depth flag and packet
+    /// property `avcC` has on the video side. MP3, AC-3, E-AC-3 and PCM carry none. FLAC's STREAMINFO
+    /// is accepted but not needed: what a FLAC track decodes on is the source-depth flag and packet
     /// length in ``MatroskaTrack/makeAudioStreamBasicDescription()``, not this.
     ///
     /// **Opus carries an `OpusHead` and Core Audio does not read it.** Measured 2026-08-10: decoding
@@ -73,7 +77,7 @@ public enum MatroskaAudioCodec: String, Sendable, CaseIterable {
     public var usesCodecPrivateAsMagicCookie: Bool {
         switch self {
         case .aac, .flac: true
-        case .mp3, .ac3, .opus, .pcmIntegerLittleEndian, .pcmIntegerBigEndian, .pcmFloat: false
+        case .mp3, .ac3, .eac3, .opus, .pcmIntegerLittleEndian, .pcmIntegerBigEndian, .pcmFloat: false
         }
     }
 }
