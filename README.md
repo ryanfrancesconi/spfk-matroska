@@ -1,94 +1,28 @@
 # spfk-matroska
 
-Matroska and WebM container reading for Swift, built on
-[libwebm](https://github.com/webmproject/libwebm)'s `mkvparser` via
-[spfk-mkvparser](https://github.com/ryanfrancesconi/spfk-mkvparser).
+The Matroska and WebM container layer AVFoundation lacks. Matroska is not among the types
+AVFoundation opens, so without this an app cannot read a `.mkv` or `.webm` file's tracks, resolution
+or frames at all. An app embeds it to treat those files like any other media: it reads the
+container's tracks, hands back compressed frames as sample buffers, and decodes video through
+VideoToolbox.
 
-## Overview
+Most callers never name a Matroska type. The any-container entry points, such as
+`VideoTrackReader.readAnyContainer(from:)` and `VideoFrameExtractor.framesForAnyContainer`, try
+AVFoundation first and fall back to the demuxer, filling the same
+[spfk-video](https://github.com/ryanfrancesconi/spfk-video) types either way. WebM is a Matroska
+profile, so one parser covers both.
 
-Matroska is absent from `AVURLAsset.audiovisualTypes()`, so AVFoundation cannot open a `.mkv` or
-`.webm` at all — no resolution, no frame rate, no playback. This package supplies the container
-layer AVFoundation is missing.
+**It vendors no codec.** Container parsing is built on libwebm's parser, repackaged in
+[spfk-mkvparser](https://github.com/ryanfrancesconi/spfk-mkvparser); decoding uses what macOS
+already ships. Audio decoding belongs to spfk-audio-conversion, and tag reading and writing for
+Matroska to spfk-metadata.
 
-**It vendors no codec**, deliberately. Container parsing has no patent surface; video and audio
-codecs are pool-licensed, and macOS decodes H.264, HEVC, AAC, FLAC and Opus natively (AV1 only
-where the hardware has a decoder) through VideoToolbox and AudioToolbox. So this package hands back compressed frames plus enough
-codec description to build a `CMFormatDescription`.
+## Audio stream descriptions
 
-`MatroskaVideoDecoder` drives VideoToolbox rather than implementing anything — the boundary is that
-no decoding *algorithm* is shipped here, not that the package refuses to call the system's.
-Audio decoding lives in `spfk-audio-conversion`, since it belongs with the rest of the audio
-conversion machinery.
-
-WebM is a Matroska profile, so one parser covers both containers.
-
-## Reading a file
-
-`MatroskaFile` opens a URL and answers the container's doc type (Matroska or WebM), its duration
-where it states one, and every track entry. Reading headers stops at the first cluster, so it costs
-the front of the file rather than a scan.
-
-`MatroskaTrack` carries a video track's codec ID, its `codecPrivate` blob verbatim, and its frame
-rate, and builds `spfk-video`'s `VideoTrackProperties` — so a container AVFoundation cannot open
-still reports resolution and codec through the same type as everything else. It builds
-`AudioTrackDescription` the same way, so the audio-track picker is written once for both backends.
-
-## Frames
-
-`MatroskaFrameReader` walks every track's blocks, interleaved, and seeks by timestamp, handing back a `MatroskaFrame`
-with its data, timestamp and keyframe flag. `MatroskaSampleBufferReader` wraps those as
-`CMSampleBuffer`s — a `MatroskaSampleBatch` at a time — for an `AVSampleBufferDisplayLayer` or an
-`AVSampleBufferAudioRenderer`.
-
-`MatroskaVideoDecoder` drives VideoToolbox over that, producing `MatroskaVideoFrame`s.
-`SupplementalVideoDecoders` covers the formats macOS will decode only once their decoder is
-requested.
-
-**Cues typically index only the video track.** Clusters interleave every track, so a seek on an
-audio track resolves through the video track's cue point and then walks — which is what makes
-seeking an audio-only read of a `.mkv` fast rather than a decode from zero.
-
-## Audio stream description
-
-`MatroskaTrack.makeAudioStreamBasicDescription()` is the single description every consumer builds
-from — the format description for the sample-buffer path, the decoder's input format, and the
-`isDecodable` answer all derive from it, so they cannot disagree.
-
-`MatroskaAudioCodec` names the codecs the reader understands, `MatroskaPCMSampleFormat` the raw
-sample layouts, and `MatroskaFLACStreamInfo` the STREAMINFO block a FLAC track carries.
-
-It is exacting in a way worth knowing: **a wrong `AudioStreamBasicDescription` does not fail.**
-`AVAudioConverter` builds happily from one, consumes every packet, emits zero frames and reports
-success at each step. `mFramesPerPacket` in particular is a property of the *file* for FLAC (its
-block size, in STREAMINFO) rather than a per-codec constant, which is why this is derived from the
-track instead of from a table.
-
-## Structure
-
-| target | holds |
-|---|---|
-| `SPFKMatroskaC` | the ObjC++ bridge over `mkvparser`'s C++ API |
-| `SPFKMatroska` | Swift types: the file and track model, the frame and sample-buffer readers, the VideoToolbox decoder and the audio stream description |
-
-ObjC++ rather than Swift/C++ interop: `.interoperabilityMode(.Cxx)` propagates to every consumer,
-which is not a cost callers should pay for a container reader.
-
-The dependency on `spfk-video` runs one way — this package builds that package's
-`VideoTrackProperties`, and `spfk-video` stays a pure-Swift leaf with no C++ in its graph.
-
-## Requirements
-
-- **Platforms:** macOS 13+, iOS 16+
-- **Swift:** 6.2+
-
-## Dependencies
-
-| Package | Purpose |
-|---------|---------|
-| [spfk-mkvparser](https://github.com/ryanfrancesconi/spfk-mkvparser) | libwebm's `mkvparser`, packaged for SPM |
-| [spfk-base](https://github.com/ryanfrancesconi/spfk-base) | Core utilities and logging |
-| [spfk-video](https://github.com/ryanfrancesconi/spfk-video) | `VideoTrackProperties`, `VideoFrameExtractor` |
-| [spfk-testing](https://github.com/ryanfrancesconi/spfk-testing) | Matroska fixtures (test target only) |
+A wrong `AudioStreamBasicDescription` does not fail: `AVAudioConverter` accepts it, consumes every
+packet and emits silence. So every consumer builds from the one description a track derives,
+`MatroskaTrack.makeAudioStreamBasicDescription()`, read from the track rather than a per-codec
+table. A FLAC track's packet length, for one, is a property of the file.
 
 ## About
 
