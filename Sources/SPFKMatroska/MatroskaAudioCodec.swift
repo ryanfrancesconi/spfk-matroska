@@ -6,8 +6,7 @@ import Foundation
 /// A Matroska audio `CodecID` macOS has a decoder for.
 ///
 /// Deliberately small: Matroska admits codecs macOS cannot decode, DTS and TrueHD among them, and
-/// a caller needs that to be an answer rather than silence. Enhanced AC-3 (`A_EAC3`) is included —
-/// Core Audio decodes it as `kAudioFormatEnhancedAC3`. Shared by both consumers, since a codec
+/// a caller needs that to be an answer rather than silence. Shared by both consumers, since a codec
 /// table with two copies drifts.
 public enum MatroskaAudioCodec: String, Sendable, CaseIterable {
     case aac = "A_AAC"
@@ -38,8 +37,8 @@ public enum MatroskaAudioCodec: String, Sendable, CaseIterable {
     /// describes rather than this. **FLAC is zero because its figure belongs to the file rather than
     /// to the codec** — ``MatroskaTrack/audioFramesPerPacket`` reads it from STREAMINFO. **Opus is
     /// zero because it belongs to the packet**: each one states its own frame size in its TOC byte,
-    /// and a stream may mix 2.5 ms through 60 ms freely. E-AC-3 uses the common 6-block figure
-    /// (1536), matching AC-3; syncframes with fewer blocks are left for a later packet-level parse.
+    /// and a stream may mix 2.5 ms through 60 ms freely. E-AC-3 is the six-block figure; a stream of
+    /// shorter syncframes would be mistimed.
     public var framesPerPacket: UInt32 {
         switch self {
         case .aac: 1024
