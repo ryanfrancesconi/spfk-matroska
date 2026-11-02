@@ -111,3 +111,23 @@ extension MatroskaFrameReader {
         return frames
     }
 }
+
+// MARK: - First packet
+
+extension MatroskaFrameReader {
+    /// The data of `trackNumber`'s first non-empty frame in `url`, or `nil` when it has none.
+    ///
+    /// Opens its own walk, so no reader's position moves. Stops at the first match, which in an
+    /// interleaved file sits near the front.
+    public static func firstPacket(url: URL, trackNumber: Int) throws -> Data? {
+        let reader = try MatroskaFrameReader(url: url)
+
+        while let frame = try reader.nextFrame() {
+            if frame.trackNumber == trackNumber, frame.data.isEmpty == false {
+                return frame.data
+            }
+        }
+
+        return nil
+    }
+}

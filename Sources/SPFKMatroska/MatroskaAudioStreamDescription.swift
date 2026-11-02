@@ -14,8 +14,10 @@ public extension MatroskaTrack {
     /// which is why FLAC's packet length and source depth are read from the file rather than
     /// assumed, and why an unmappable configuration throws.
     ///
+    /// - Parameter firstPacket: the track's first packet. E-AC-3 states its packet length in each
+    ///   syncframe, so without it the six-block figure is assumed.
     /// - Throws: ``MatroskaSampleBufferError``.
-    func makeAudioStreamBasicDescription() throws -> AudioStreamBasicDescription {
+    func makeAudioStreamBasicDescription(firstPacket: Data? = nil) throws -> AudioStreamBasicDescription {
         guard hasUnsupportedContentEncoding == false else {
             throw MatroskaSampleBufferError.unsupportedContentEncoding(codecID: codecID)
         }
@@ -36,12 +38,16 @@ public extension MatroskaTrack {
             return try flacStreamDescription(parameters: parameters)
         }
 
+        let framesPerPacket = codec == .eac3
+            ? firstPacket.flatMap(MatroskaAC3Header.init(frame:)).map { UInt32($0.framesPerPacket) }
+            : nil
+
         return AudioStreamBasicDescription(
             mSampleRate: parameters.sampleRate,
             mFormatID: codec.formatID,
             mFormatFlags: 0,
             mBytesPerPacket: 0,
-            mFramesPerPacket: codec.framesPerPacket,
+            mFramesPerPacket: framesPerPacket ?? codec.framesPerPacket,
             mBytesPerFrame: 0,
             mChannelsPerFrame: UInt32(parameters.channelCount),
             mBitsPerChannel: 0,
@@ -55,7 +61,7 @@ public extension MatroskaTrack {
     /// block size for the whole stream; a variable-block encoder would put every packet after the
     /// first in the wrong place.
     var audioFramesPerPacket: UInt32? {
-        guard let codec = MatroskaAudioCodec(rawValue: codecID) else { return nil }
+        guard let codec = MatroskaAudioCodec(rawValue: codecID), codec != .eac3 else { return nil }
 
         if codec.framesPerPacket > 0 {
             return codec.framesPerPacket
@@ -71,9 +77,9 @@ public extension MatroskaTrack {
     /// Frames `packet` decodes to, in this track's own sample rate.
     ///
     /// **Asked per packet, because not every codec has a track-level answer.** Opus states its
-    /// length in each packet's TOC byte and may mix frame sizes within one stream, so
-    /// ``audioFramesPerPacket`` is `nil` for it and this reads the packet instead. Everything else
-    /// answers from the fixed figure and ignores the data.
+    /// length in each packet's TOC byte and E-AC-3 in each syncframe's header, and either may vary
+    /// it within one stream, so ``audioFramesPerPacket`` is `nil` for both and this reads the packet
+    /// instead. Everything else answers from the fixed figure and ignores the data.
     ///
     /// `nil` when neither is knowable, which leaves a caller to fall back on container timing.
     func audioFrameCount(forPacket packet: Data) -> Int? {
@@ -81,9 +87,13 @@ public extension MatroskaTrack {
             return Int(fixed)
         }
 
-        guard MatroskaAudioCodec(rawValue: codecID) == .opus,
-              let frames = MatroskaOpusPacket.frameCount(packet)
-        else {
+        let codec = MatroskaAudioCodec(rawValue: codecID)
+
+        if codec == .eac3 {
+            return MatroskaAC3Header(frame: packet)?.framesPerPacket
+        }
+
+        guard codec == .opus, let frames = MatroskaOpusPacket.frameCount(packet) else {
             return nil
         }
 

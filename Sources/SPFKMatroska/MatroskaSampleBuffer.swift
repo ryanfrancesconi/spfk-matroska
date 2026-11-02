@@ -163,31 +163,46 @@ public extension MatroskaTrack {
     ///
     /// `CodecPrivate` becomes the magic cookie for the codecs that take one — for AAC that blob
     /// *is* the AudioSpecificConfig, the same "stored verbatim" property `avcC` has on the video
-    /// side. See ``MatroskaAudioCodec/usesCodecPrivateAsMagicCookie``.
+    /// side. See ``MatroskaAudioCodec/usesCodecPrivateAsMagicCookie(channelCount:)``.
     ///
+    /// More than two channels carry a layout, from ``audioChannelLayoutTag(firstPacket:)`` or
+    /// discrete when that is unknown: without one, `AVAudioFormat` cannot be built from the result.
+    ///
+    /// - Parameter firstPacket: the track's first packet, which AC-3 and E-AC-3 need for their
+    ///   layout and E-AC-3 for its packet length. See ``needsFirstPacketForChannelLayout``.
     /// - Throws: ``MatroskaSampleBufferError``.
-    func makeAudioFormatDescription() throws -> CMAudioFormatDescription {
+    func makeAudioFormatDescription(firstPacket: Data? = nil) throws -> CMAudioFormatDescription {
         guard let codec = MatroskaAudioCodec(rawValue: codecID) else {
             throw MatroskaSampleBufferError.unsupportedCodec(codecID)
         }
 
-        var description = try makeAudioStreamBasicDescription()
+        var description = try makeAudioStreamBasicDescription(firstPacket: firstPacket)
+        let channelCount = description.mChannelsPerFrame
 
-        let cookie = codec.usesCodecPrivateAsMagicCookie ? codecPrivate : nil
+        let usesCookie = codec.usesCodecPrivateAsMagicCookie(channelCount: Int(channelCount))
+        let cookie = usesCookie ? codecPrivate ?? Data() : Data()
+
+        var layout = AudioChannelLayout()
+        layout.mChannelLayoutTag = audioChannelLayoutTag(firstPacket: firstPacket)
+            ?? (kAudioChannelLayoutTag_DiscreteInOrder | channelCount)
+
+        let layoutSize = channelCount > 2 ? MemoryLayout<AudioChannelLayout>.size : 0
 
         var formatDescription: CMAudioFormatDescription?
 
-        let status = (cookie.flatMap { $0.isEmpty ? nil : $0 } ?? Data()).withUnsafeBytes { bytes in
-            CMAudioFormatDescriptionCreate(
-                allocator: kCFAllocatorDefault,
-                asbd: &description,
-                layoutSize: 0,
-                layout: nil,
-                magicCookieSize: bytes.count,
-                magicCookie: bytes.count > 0 ? bytes.baseAddress : nil,
-                extensions: nil,
-                formatDescriptionOut: &formatDescription
-            )
+        let status = cookie.withUnsafeBytes { bytes in
+            withUnsafePointer(to: &layout) { layoutPointer in
+                CMAudioFormatDescriptionCreate(
+                    allocator: kCFAllocatorDefault,
+                    asbd: &description,
+                    layoutSize: layoutSize,
+                    layout: layoutSize > 0 ? layoutPointer : nil,
+                    magicCookieSize: bytes.count,
+                    magicCookie: bytes.count > 0 ? bytes.baseAddress : nil,
+                    extensions: nil,
+                    formatDescriptionOut: &formatDescription
+                )
+            }
         }
 
         guard status == noErr, let formatDescription else {

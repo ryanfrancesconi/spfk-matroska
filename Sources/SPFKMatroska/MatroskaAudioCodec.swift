@@ -37,8 +37,8 @@ public enum MatroskaAudioCodec: String, Sendable, CaseIterable {
     /// describes rather than this. **FLAC is zero because its figure belongs to the file rather than
     /// to the codec** — ``MatroskaTrack/audioFramesPerPacket`` reads it from STREAMINFO. **Opus is
     /// zero because it belongs to the packet**: each one states its own frame size in its TOC byte,
-    /// and a stream may mix 2.5 ms through 60 ms freely. E-AC-3 is the six-block figure; a stream of
-    /// shorter syncframes would be mistimed.
+    /// and a stream may mix 2.5 ms through 60 ms freely. E-AC-3's is the six-block default; each
+    /// syncframe states its own, which ``MatroskaTrack/audioFrameCount(forPacket:)`` reads.
     public var framesPerPacket: UInt32 {
         switch self {
         case .aac: 1024
@@ -66,17 +66,17 @@ public enum MatroskaAudioCodec: String, Sendable, CaseIterable {
     /// For AAC that blob *is* the AudioSpecificConfig Core Audio wants, the same "stored verbatim"
     /// property `avcC` has on the video side. MP3, AC-3, E-AC-3 and PCM carry none. FLAC's STREAMINFO
     /// is accepted but not needed: what a FLAC track decodes on is the source-depth flag and packet
-    /// length in ``MatroskaTrack/makeAudioStreamBasicDescription()``, not this.
+    /// length in ``MatroskaTrack/makeAudioStreamBasicDescription(firstPacket:)``, not this.
     ///
-    /// **Opus carries an `OpusHead` and Core Audio does not read it.** Measured 2026-08-10: decoding
-    /// with the cookie and without produced byte-identical output, at both a stated and an unstated
-    /// packet length. It is left out rather than passed on the chance it helps, because a cookie the
-    /// decoder does not expect is a way to be refused. The one thing `OpusHead` states that goes
-    /// unapplied is the pre-skip — see ``MatroskaTrack/opusPreSkipFrames``.
-    public var usesCodecPrivateAsMagicCookie: Bool {
+    /// **Opus carries an `OpusHead`, which Core Audio needs only past two channels.** Measured
+    /// 2026-08-10, stereo decodes byte-identically with and without it, so it is left out there:
+    /// a cookie the decoder does not expect is a way to be refused. Measured 2026-11-01, 5.1 decodes
+    /// nothing without it, since its channel mapping is stated there and nowhere else.
+    public func usesCodecPrivateAsMagicCookie(channelCount: Int) -> Bool {
         switch self {
         case .aac, .flac: true
-        case .mp3, .ac3, .eac3, .opus, .pcmIntegerLittleEndian, .pcmIntegerBigEndian, .pcmFloat: false
+        case .opus: channelCount > 2
+        case .mp3, .ac3, .eac3, .pcmIntegerLittleEndian, .pcmIntegerBigEndian, .pcmFloat: false
         }
     }
 }

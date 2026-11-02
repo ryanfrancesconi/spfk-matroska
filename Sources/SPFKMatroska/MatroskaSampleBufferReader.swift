@@ -76,7 +76,11 @@ public final class MatroskaSampleBufferReader: @unchecked Sendable {
         }
 
         if let track = requested ?? describableAudioTracks.first,
-           let description = try? track.makeAudioFormatDescription() {
+           let description = try? track.makeAudioFormatDescription(
+               firstPacket: track.needsFirstPacketForChannelLayout
+                   ? try? MatroskaFrameReader.firstPacket(url: url, trackNumber: track.number)
+                   : nil
+           ) {
             audioTrack = track
             audioFormatDescription = description
 
