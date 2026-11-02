@@ -2,7 +2,7 @@
 
 The Matroska and WebM container layer AVFoundation lacks. Matroska is not among the types
 AVFoundation opens, so without this an app cannot read a `.mkv` or `.webm` file's tracks, resolution
-or frames at all. An app embeds it to treat those files like any other media: it reads the
+or frames at all. With it, those files work like any other media: it reads the
 container's tracks, hands back compressed frames as sample buffers, and decodes video through
 VideoToolbox.
 
