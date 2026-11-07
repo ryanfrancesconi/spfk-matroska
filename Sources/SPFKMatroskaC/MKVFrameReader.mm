@@ -11,7 +11,7 @@
 
 /// Whether the segment's declared size runs past the end of the file. libwebm demotes such a
 /// segment to unknown size, so its `m_size` cannot answer this.
-static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvReader *reader) {
+static BOOL segmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvReader *reader) {
     long long total = 0;
     long long available = 0;
 
@@ -71,7 +71,7 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
 
     if (_reader->Open(url.fileSystemRepresentation) != 0) {
         if (error != nullptr) {
-            *error = MKVMakeError(MKVErrorUnreadableFile, url, @"Could not open the file.");
+            *error = MKV::makeError(MKVErrorUnreadableFile, url, @"Could not open the file.");
         }
         return nil;
     }
@@ -81,18 +81,18 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
 
     if (header.Parse(_reader, position) < 0) {
         if (error != nullptr) {
-            *error = MKVMakeError(MKVErrorNotMatroska, url, @"Not a Matroska or WebM file.");
+            *error = MKV::makeError(MKVErrorNotMatroska, url, @"Not a Matroska or WebM file.");
         }
         return nil;
     }
 
-    NSString *docType = MKVStringOrNil(header.m_docType) ?: @"matroska";
+    NSString *docType = MKV::stringOrNil(header.m_docType) ?: @"matroska";
 
     mkvparser::Segment *rawSegment = nullptr;
 
     if (mkvparser::Segment::CreateInstance(_reader, position, rawSegment) != 0 || rawSegment == nullptr) {
         if (error != nullptr) {
-            *error = MKVMakeError(MKVErrorMalformedSegment, url, @"No readable segment.");
+            *error = MKV::makeError(MKVErrorMalformedSegment, url, @"No readable segment.");
         }
         return nil;
     }
@@ -101,12 +101,12 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
 
     if (_segment->ParseHeaders() < 0) {
         if (error != nullptr) {
-            *error = MKVMakeError(MKVErrorMalformedSegment, url, @"Malformed segment headers.");
+            *error = MKV::makeError(MKVErrorMalformedSegment, url, @"Malformed segment headers.");
         }
         return nil;
     }
 
-    MKVSegmentDescription *description = MKVMakeSegmentDescription(_segment, docType, url, error);
+    MKVSegmentDescription *description = MKV::makeSegmentDescription(_segment, docType, url, error);
 
     if (description == nil) {
         return nil;
@@ -116,7 +116,7 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
 
     long long available = 0;
     _reader->Length(&_fileLength, &available);
-    _isTruncated = MKVSegmentIsTruncated(_segment, _reader);
+    _isTruncated = segmentIsTruncated(_segment, _reader);
 
     // Cached because a frame's duration comes from its track, and looking it up per frame would
     // walk the track list for every one of them.
@@ -170,7 +170,7 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
         long length = 0;
 
         if (_segment->LoadCluster(position, length) < 0) {
-            self.failure = MKVMakeError(MKVErrorMalformedSegment, _url, @"Failed to load a cluster.");
+            self.failure = MKV::makeError(MKVErrorMalformedSegment, _url, @"Failed to load a cluster.");
             return nullptr;
         }
 
@@ -235,7 +235,7 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
 /// pointing at it, and following that entry is what turns a seek from a scan into a lookup.
 ///
 /// The already-parsed SeekHead is checked first because it costs nothing; a file that names Cues
-/// only through a nested SeekHead needs the chain walked, which is what ``MKVCuesOffsetInSeekHead``
+/// only through a nested SeekHead needs the chain walked, which is what ``MKV::cuesOffsetInSeekHead``
 /// does.
 - (nullable const mkvparser::Cues *)loadCues {
     if (const mkvparser::Cues *cues = _segment->GetCues()) {
@@ -260,7 +260,7 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
     }
 
     if (cuesOffset < 0) {
-        cuesOffset = MKVCuesOffsetInSeekHead(_segment, seekHead->m_element_start - _segment->m_start, 0);
+        cuesOffset = MKV::cuesOffsetInSeekHead(_segment, seekHead->m_element_start - _segment->m_start, 0);
     }
 
     if (cuesOffset < 0) {
@@ -285,7 +285,7 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
 
     if (track == nullptr) {
         if (error != nullptr) {
-            *error = MKVMakeError(MKVErrorNoTracks, _url, @"No such track.");
+            *error = MKV::makeError(MKVErrorNoTracks, _url, @"No such track.");
         }
         return NO;
     }
@@ -294,7 +294,7 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
 
     if (cues == nullptr) {
         if (error != nullptr) {
-            *error = MKVMakeError(MKVErrorNoSeekIndex, _url, @"The file carries no Cues index.");
+            *error = MKV::makeError(MKVErrorNoSeekIndex, _url, @"The file carries no Cues index.");
         }
         return NO;
     }
@@ -393,7 +393,7 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
 
     if (cuePoint == nullptr || trackPosition == nullptr) {
         if (error != nullptr) {
-            *error = MKVMakeError(MKVErrorNoSeekIndex, _url, @"No cue point for that time.");
+            *error = MKV::makeError(MKVErrorNoSeekIndex, _url, @"No cue point for that time.");
         }
         return NO;
     }
@@ -410,7 +410,7 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
 
         if (cluster == nullptr || cluster->EOS()) {
             if (error != nullptr) {
-                *error = MKVMakeError(MKVErrorMalformedSegment, _url, @"The cue point names no cluster.");
+                *error = MKV::makeError(MKVErrorMalformedSegment, _url, @"The cue point names no cluster.");
             }
             return NO;
         }
@@ -419,7 +419,7 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
 
         if (cluster->GetFirst(first) < 0 || first == nullptr || first->EOS()) {
             if (error != nullptr) {
-                *error = MKVMakeError(MKVErrorMalformedSegment, _url, @"The cluster carries no blocks.");
+                *error = MKV::makeError(MKVErrorMalformedSegment, _url, @"The cluster carries no blocks.");
             }
             return NO;
         }
@@ -432,7 +432,7 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
 
         if (entry == nullptr || entry->EOS()) {
             if (error != nullptr) {
-                *error = MKVMakeError(MKVErrorMalformedSegment, _url, @"The cue point names no block.");
+                *error = MKV::makeError(MKVErrorMalformedSegment, _url, @"The cue point names no block.");
             }
             return NO;
         }
@@ -528,7 +528,7 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
         NSMutableData *data = [NSMutableData dataWithLength:prefixLength + (NSUInteger)frame.len];
 
         if (data == nil) {
-            self.failure = MKVMakeError(MKVErrorMalformedSegment, _url, @"Frame length is not readable.");
+            self.failure = MKV::makeError(MKVErrorMalformedSegment, _url, @"Frame length is not readable.");
             return nil;
         }
 
@@ -537,7 +537,7 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
         }
 
         if (frame.Read(_reader, (unsigned char *)data.mutableBytes + prefixLength) < 0) {
-            self.failure = MKVMakeError(MKVErrorMalformedSegment, _url, @"Failed to read frame data.");
+            self.failure = MKV::makeError(MKVErrorMalformedSegment, _url, @"Failed to read frame data.");
             return nil;
         }
 
@@ -554,7 +554,7 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
         // libwebm reports -1 both for a time before the segment starts and for one that overflows
         // nanoseconds; only the second is malformed.
         if (timestamp < 0 && block->GetTimeCode(_cluster) >= 0) {
-            self.failure = MKVMakeError(MKVErrorMalformedSegment, _url, @"Block time overflows.");
+            self.failure = MKV::makeError(MKVErrorMalformedSegment, _url, @"Block time overflows.");
             return nil;
         }
 
@@ -563,7 +563,7 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
 
             if (__builtin_mul_overflow((long long)laceIndex, defaultDuration, &offset) ||
                 __builtin_add_overflow(timestamp, offset, &timestamp)) {
-                self.failure = MKVMakeError(MKVErrorMalformedSegment, _url, @"Block time overflows.");
+                self.failure = MKV::makeError(MKVErrorMalformedSegment, _url, @"Block time overflows.");
                 return nil;
             }
         }
@@ -584,7 +584,7 @@ static BOOL MKVSegmentIsTruncated(mkvparser::Segment *segment, mkvparser::IMkvRe
         return;
     }
 
-    self.failure = MKVMakeError(MKVErrorMalformedSegment, _url, reason);
+    self.failure = MKV::makeError(MKVErrorMalformedSegment, _url, reason);
 }
 
 @end

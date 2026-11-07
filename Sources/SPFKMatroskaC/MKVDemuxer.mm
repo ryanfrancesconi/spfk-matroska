@@ -7,7 +7,7 @@
 
 NSErrorDomain const MKVErrorDomain = @"com.spongefork.matroska";
 
-NSError *MKVMakeError(MKVError code, NSURL *url, NSString *reason) {
+NSError *MKV::makeError(MKVError code, NSURL *url, NSString *reason) {
     return [NSError errorWithDomain:MKVErrorDomain
                                code:code
                            userInfo:@{
@@ -16,15 +16,15 @@ NSError *MKVMakeError(MKVError code, NSURL *url, NSString *reason) {
                            }];
 }
 
-MKVSegmentDescription *_Nullable MKVMakeSegmentDescription(mkvparser::Segment *segment,
-                                                           NSString *docType,
-                                                           NSURL *url,
-                                                           NSError **error) {
+MKVSegmentDescription *_Nullable MKV::makeSegmentDescription(mkvparser::Segment *segment,
+                                                             NSString *docType,
+                                                             NSURL *url,
+                                                             NSError **error) {
     const mkvparser::SegmentInfo *info = segment->GetInfo();
 
     if (info == nullptr) {
         if (error != nullptr) {
-            *error = MKVMakeError(MKVErrorMalformedSegment, url, @"Segment states no info.");
+            *error = MKV::makeError(MKVErrorMalformedSegment, url, @"Segment states no info.");
         }
         return nil;
     }
@@ -34,7 +34,7 @@ MKVSegmentDescription *_Nullable MKVMakeSegmentDescription(mkvparser::Segment *s
 
     if (trackCount == 0) {
         if (error != nullptr) {
-            *error = MKVMakeError(MKVErrorNoTracks, url, @"The file declares no tracks.");
+            *error = MKV::makeError(MKVErrorNoTracks, url, @"The file declares no tracks.");
         }
         return nil;
     }
@@ -63,7 +63,7 @@ MKVSegmentDescription *_Nullable MKVMakeSegmentDescription(mkvparser::Segment *s
 
     if (reader.Open(url.fileSystemRepresentation) != 0) {
         if (error != nullptr) {
-            *error = MKVMakeError(MKVErrorUnreadableFile, url, @"Could not open the file.");
+            *error = MKV::makeError(MKVErrorUnreadableFile, url, @"Could not open the file.");
         }
         return nil;
     }
@@ -73,19 +73,19 @@ MKVSegmentDescription *_Nullable MKVMakeSegmentDescription(mkvparser::Segment *s
 
     if (header.Parse(&reader, position) < 0) {
         if (error != nullptr) {
-            *error = MKVMakeError(MKVErrorNotMatroska, url, @"Not a Matroska or WebM file.");
+            *error = MKV::makeError(MKVErrorNotMatroska, url, @"Not a Matroska or WebM file.");
         }
         return nil;
     }
 
-    NSString *docType = MKVStringOrNil(header.m_docType) ?: @"matroska";
+    NSString *docType = MKV::stringOrNil(header.m_docType) ?: @"matroska";
 
     mkvparser::Segment *rawSegment = nullptr;
 
     // Returns nonzero on failure, and only assigns the out parameter on success.
     if (mkvparser::Segment::CreateInstance(&reader, position, rawSegment) != 0 || rawSegment == nullptr) {
         if (error != nullptr) {
-            *error = MKVMakeError(MKVErrorMalformedSegment, url, @"No readable segment.");
+            *error = MKV::makeError(MKVErrorMalformedSegment, url, @"No readable segment.");
         }
         return nil;
     }
@@ -95,12 +95,12 @@ MKVSegmentDescription *_Nullable MKVMakeSegmentDescription(mkvparser::Segment *s
     // Stops at the first cluster, so this reads the front of the file rather than the frame data.
     if (segment->ParseHeaders() < 0) {
         if (error != nullptr) {
-            *error = MKVMakeError(MKVErrorMalformedSegment, url, @"Malformed segment headers.");
+            *error = MKV::makeError(MKVErrorMalformedSegment, url, @"Malformed segment headers.");
         }
         return nil;
     }
 
-    return MKVMakeSegmentDescription(segment.get(), docType, url, error);
+    return MKV::makeSegmentDescription(segment.get(), docType, url, error);
 }
 
 @end

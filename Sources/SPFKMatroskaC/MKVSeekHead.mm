@@ -18,9 +18,9 @@ static const int MKVMaxSeekHeadDepth = 4;
 ///
 /// Reads through mkvparser's own EBML primitives, so this is a traversal rather than a second
 /// implementation of the format.
-long long MKVCuesOffsetInSeekHead(mkvparser::Segment *segment,
-                                  long long seekHeadOffset,
-                                  int depth) {
+long long MKV::cuesOffsetInSeekHead(mkvparser::Segment *segment,
+                                    long long seekHeadOffset,
+                                    int depth) {
     if (segment == nullptr || seekHeadOffset < 0 || depth > MKVMaxSeekHeadDepth) {
         return -1;
     }
@@ -95,5 +95,5 @@ long long MKVCuesOffsetInSeekHead(mkvparser::Segment *segment,
         pos = entryStop;
     }
 
-    return (nestedOffset >= 0) ? MKVCuesOffsetInSeekHead(segment, nestedOffset, depth + 1) : -1;
+    return (nestedOffset >= 0) ? MKV::cuesOffsetInSeekHead(segment, nestedOffset, depth + 1) : -1;
 }

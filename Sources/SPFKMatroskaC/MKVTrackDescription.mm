@@ -8,7 +8,7 @@
 
 /// Replaces each maximal ill-formed subsequence with U+FFFD, the rule Swift's
 /// `String(decoding:as:)` follows.
-static NSString *MKVDecodeUTF8Lossily(const char *value) {
+static NSString *decodeUTF8Lossily(const char *value) {
     const auto *bytes = reinterpret_cast<const unsigned char *>(value);
     const size_t length = strlen(value);
     std::string output;
@@ -69,18 +69,18 @@ static NSString *MKVDecodeUTF8Lossily(const char *value) {
     return [[NSString alloc] initWithBytes:output.data() length:output.size() encoding:NSUTF8StringEncoding];
 }
 
-NSString *_Nullable MKVStringOrNil(const char *_Nullable value) {
+NSString *_Nullable MKV::stringOrNil(const char *_Nullable value) {
     if (value == nullptr) {
         return nil;
     }
-    return [NSString stringWithUTF8String:value] ?: MKVDecodeUTF8Lossily(value);
+    return [NSString stringWithUTF8String:value] ?: decodeUTF8Lossily(value);
 }
 
 /// `ContentCompAlgo` for header stripping.
 static const unsigned long long MKVContentCompAlgoHeaderStripping = 3;
 
 /// The stripped bytes, when header stripping of the frames is the track's only encoding.
-static NSData *_Nullable MKVStrippedHeader(const mkvparser::Track *track) {
+static NSData *_Nullable trackStrippedHeader(const mkvparser::Track *track) {
     if (track->GetContentEncodingCount() != 1) {
         return nil;
     }
@@ -104,7 +104,7 @@ static NSData *_Nullable MKVStrippedHeader(const mkvparser::Track *track) {
 
 /// How many `ContentEncoding` elements the track entry states, or -1 when it cannot be walked.
 /// libwebm drops an encoding it fails to parse, which must not read as no encoding.
-static long long MKVDeclaredContentEncodingCount(const mkvparser::Track *track) {
+static long long declaredContentEncodingCount(const mkvparser::Track *track) {
     mkvparser::IMkvReader *reader = track->m_pSegment->m_pReader;
     const long long stop = track->m_element_start + track->m_element_size;
 
@@ -157,9 +157,9 @@ static long long MKVDeclaredContentEncodingCount(const mkvparser::Track *track) 
     _number = track->GetNumber();
     _uid = track->GetUid();
     _type = (MKVTrackType)track->GetType();
-    _codecID = MKVStringOrNil(track->GetCodecId());
-    _codecName = MKVStringOrNil(track->GetCodecNameAsUTF8());
-    _name = MKVStringOrNil(track->GetNameAsUTF8());
+    _codecID = MKV::stringOrNil(track->GetCodecId());
+    _codecName = MKV::stringOrNil(track->GetCodecNameAsUTF8());
+    _name = MKV::stringOrNil(track->GetNameAsUTF8());
     // Absent stays nil so the spec default applies; present but undecodable is undetermined.
     const char *language = track->GetLanguage();
     if (language != nullptr) {
@@ -176,9 +176,9 @@ static long long MKVDeclaredContentEncodingCount(const mkvparser::Track *track) 
         _codecPrivate = [NSData dataWithBytes:codecPrivate length:codecPrivateSize];
     }
 
-    _strippedHeader = MKVStrippedHeader(track);
+    _strippedHeader = trackStrippedHeader(track);
 
-    const long long declaredEncodings = MKVDeclaredContentEncodingCount(track);
+    const long long declaredEncodings = declaredContentEncodingCount(track);
     const long long parsedEncodings = (long long)track->GetContentEncodingCount();
     _hasUnsupportedContentEncoding = declaredEncodings != parsedEncodings ||
                                      (parsedEncodings > 0 && _strippedHeader == nil);

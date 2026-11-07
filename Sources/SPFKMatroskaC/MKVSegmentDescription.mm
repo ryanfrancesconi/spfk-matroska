@@ -14,9 +14,9 @@
 
     _docType = [docType copy];
     _tracks = [tracks copy];
-    _title = MKVStringOrNil(info->GetTitleAsUTF8());
-    _muxingApp = MKVStringOrNil(info->GetMuxingAppAsUTF8());
-    _writingApp = MKVStringOrNil(info->GetWritingAppAsUTF8());
+    _title = MKV::stringOrNil(info->GetTitleAsUTF8());
+    _muxingApp = MKV::stringOrNil(info->GetMuxingAppAsUTF8());
+    _writingApp = MKV::stringOrNil(info->GetWritingAppAsUTF8());
     _timecodeScale = info->GetTimeCodeScale();
 
     // The parser returns -1 for a file that states no Duration, which live captures legitimately
