@@ -23,7 +23,7 @@ public struct MatroskaSampleBatch: @unchecked Sendable {
 /// Stored order is decode order and is what a renderer wants, so nothing here reorders. Video
 /// timestamps therefore do not ascend for a stream with B-frames.
 ///
-/// Both tracks come out of one walk, because the muxer already interleaved them — a second reader
+/// Both tracks come out of one walk, because the muxer already interleaved them - a second reader
 /// would mean a second file handle and two positions to keep in step. Clusters are parsed as the
 /// walk reaches them.
 public final class MatroskaSampleBufferReader: @unchecked Sendable {
@@ -32,7 +32,7 @@ public final class MatroskaSampleBufferReader: @unchecked Sendable {
     public let videoTrack: MatroskaTrack
     public let videoFormatDescription: CMVideoFormatDescription
 
-    /// `nil` when the file has no audio, or none this package can describe — neither is a failure,
+    /// `nil` when the file has no audio, or none this package can describe - neither is a failure,
     /// and the picture still plays.
     public let audioTrack: MatroskaTrack?
     public let audioFormatDescription: CMAudioFormatDescription?
@@ -150,14 +150,14 @@ public final class MatroskaSampleBufferReader: @unchecked Sendable {
     /// Timing for an audio packet, counted from the start of the run rather than read from the
     /// container.
     ///
-    /// **Matroska quantizes block timestamps to the segment's `TimecodeScale`** — a millisecond in
-    /// every file seen so far — and no compressed audio packet length divides that evenly. An AAC
+    /// **Matroska quantizes block timestamps to the segment's `TimecodeScale`** - a millisecond in
+    /// every file seen so far - and no compressed audio packet length divides that evenly. An AAC
     /// packet is 21.333 ms, so the stored times drift against the true grid and snap back at each
     /// block boundary; with lacing that is a discontinuity several times a second, and it is
     /// audible. Counting frames instead puts every packet exactly where it belongs.
     ///
-    /// A jump larger than half a second is treated as a real discontinuity — a gap in the file, or
-    /// a seek — and re-anchors rather than being smoothed away.
+    /// A jump larger than half a second is treated as a real discontinuity - a gap in the file, or
+    /// a seek - and re-anchors rather than being smoothed away.
     ///
     /// **Returning `nil` costs the audio entirely, rather than degrading it.** The container states
     /// no block duration, so a buffer built from its timing carries an invalid one, and
@@ -227,7 +227,7 @@ public final class MatroskaSampleBufferReader: @unchecked Sendable {
     /// Whether this package can open `url` for playback.
     ///
     /// Answered by reading the file's headers rather than its extension, so it is true only when
-    /// there is really a video track with a codec that can be described — a `.mkv` carrying DTS
+    /// there is really a video track with a codec that can be described - a `.mkv` carrying DTS
     /// video, or a file misnamed `.mkv`, answers false rather than failing later.
     ///
     /// Costs the header parse, not a cluster walk, and a caller that gets `true` is about to open

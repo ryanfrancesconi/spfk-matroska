@@ -8,7 +8,7 @@ extension MatroskaTrack {
     /// that is not audio.
     ///
     /// Keyed on ``uid`` rather than ``number``, so a selection outlives a remux. The reader is
-    /// still opened by number — see ``MatroskaFile/audioTrack(id:)``, which is the mapping back.
+    /// still opened by number - see ``MatroskaFile/audioTrack(id:)``, which is the mapping back.
     public var audioTrackDescription: AudioTrackDescription? {
         guard case let .audio(parameters) = kind else { return nil }
 
@@ -26,7 +26,7 @@ extension MatroskaTrack {
 extension MatroskaFile {
     /// Every audio track, described neutrally.
     ///
-    /// Includes tracks whose codec cannot be decoded here — listing is a question about the file,
+    /// Includes tracks whose codec cannot be decoded here - listing is a question about the file,
     /// and a caller that can only offer playable tracks filters for itself. `MatroskaSampleBufferReader`
     /// does exactly that, which is why its own list is the narrower one.
     public var audioTrackDescriptions: [AudioTrackDescription] {
@@ -34,7 +34,7 @@ extension MatroskaFile {
     }
 
     /// The track a neutral identifier names, mapping `TrackUID` back to the track a reader is
-    /// opened with. `nil` when the file no longer carries it — a persisted selection surviving the
+    /// opened with. `nil` when the file no longer carries it - a persisted selection surviving the
     /// file being replaced.
     public func audioTrack(id: AudioTrackDescription.ID) -> MatroskaTrack? {
         tracks.first { track in

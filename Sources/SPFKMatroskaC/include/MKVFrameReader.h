@@ -42,7 +42,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Repositions the walk to the keyframe at or before `timeNanoseconds` on `trackNumber`.
 ///
-/// Uses the file's `Cues` index, so the cost is a lookup and one cluster read rather than a scan —
+/// Uses the file's `Cues` index, so the cost is a lookup and one cluster read rather than a scan -
 /// which is the difference between a poster frame being free and it costing an hour of decoding on
 /// a feature film.
 ///

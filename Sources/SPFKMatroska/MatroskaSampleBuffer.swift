@@ -14,7 +14,7 @@ public enum MatroskaSampleBufferError: Error, Equatable, Sendable {
     /// how to describe.
     case unsupportedCodec(String)
 
-    /// A codec this package describes, in a configuration Core Audio cannot be told about — a FLAC
+    /// A codec this package describes, in a configuration Core Audio cannot be told about - a FLAC
     /// bit depth with no source-depth flag, or a PCM track stating no `BitDepth`.
     case unsupportedAudioConfiguration(codecID: String, detail: String)
 
@@ -99,7 +99,7 @@ public extension MatroskaTrack {
 
     /// Builds the `CMVideoFormatDescription` a decoder needs to make sense of this track's frames.
     ///
-    /// `CodecPrivate` goes in verbatim as a sample-description extension atom — Matroska stores
+    /// `CodecPrivate` goes in verbatim as a sample-description extension atom - Matroska stores
     /// exactly the ISO-BMFF configuration box (`avcC` for H.264), which is why no conversion is
     /// needed and why the demuxer hands the blob back untouched.
     ///
@@ -109,8 +109,8 @@ public extension MatroskaTrack {
             throw MatroskaSampleBufferError.unsupportedContentEncoding(codecID: codecID)
         }
 
-        // Every path that decodes video builds its description here — the decoder, the sample
-        // buffer reader behind the display layer, and the decodability probe — so registering here
+        // Every path that decodes video builds its description here - the decoder, the sample
+        // buffer reader behind the display layer, and the decodability probe - so registering here
         // is the one place a new caller cannot forget. See ``SupplementalVideoDecoders``.
         SupplementalVideoDecoders.register()
 
@@ -161,7 +161,7 @@ public extension MatroskaTrack {
 
     /// Builds the `CMAudioFormatDescription` a renderer needs to decode this track's packets.
     ///
-    /// `CodecPrivate` becomes the magic cookie for the codecs that take one — for AAC that blob
+    /// `CodecPrivate` becomes the magic cookie for the codecs that take one - for AAC that blob
     /// *is* the AudioSpecificConfig, the same "stored verbatim" property `avcC` has on the video
     /// side. See ``MatroskaAudioCodec/usesCodecPrivateAsMagicCookie(channelCount:)``.
     ///
@@ -221,7 +221,7 @@ public extension MatroskaTrack {
     /// ffmpeg's WebM muxer writes no `CodecPrivate` for VP9, so nearly no WebM has one, and without
     /// an atom `VTDecompressionSessionCreate` answers `codecBadDataErr` (-8971).
     ///
-    /// **Profile 0 only — 8-bit 4:2:0, which is what almost every VP9 stream is.** The profile,
+    /// **Profile 0 only - 8-bit 4:2:0, which is what almost every VP9 stream is.** The profile,
     /// depth and subsampling stated here are read by the decoder rather than taken from the
     /// bitstream: measured 2026-08-10, a profile-2 (10-bit) stream described this way creates a
     /// session and then fails every frame with -12909. Closing that needs the profile read out of
@@ -229,7 +229,7 @@ public extension MatroskaTrack {
     ///
     /// Layout is the VP Codec ISO Media File Format Binding: version and flags, profile, level,
     /// then depth, subsampling and range packed into one byte, three colour bytes, and the length
-    /// of the initialization data that VP9 never has. Level and colour are left unspecified — the
+    /// of the initialization data that VP9 never has. Level and colour are left unspecified - the
     /// container states neither, and neither affects whether a frame decodes.
     private static let defaultVP9Configuration = Data([
         1, 0, 0, 0,
@@ -259,15 +259,15 @@ public extension MatroskaFrame {
     /// Wraps this frame as a `CMSampleBuffer` ready to enqueue for decode or display.
     ///
     /// **The decode timestamp is deliberately invalid.** Matroska stores presentation time and no
-    /// container-level DTS, and frames come out of the demuxer in stored order — which *is* decode
+    /// container-level DTS, and frames come out of the demuxer in stored order - which *is* decode
     /// order. Inventing a DTS would either duplicate that ordering or contradict it.
     ///
     /// Takes a plain `CMFormatDescription` rather than the video-specific spelling because audio
-    /// frames go through the same packaging — one Matroska frame is one packet either way.
+    /// frames go through the same packaging - one Matroska frame is one packet either way.
     ///
     /// - Parameter timing: overrides the container's own timing. Audio supplies this: Matroska
     ///   quantizes block timestamps to the segment's `TimecodeScale`, usually a millisecond, which
-    ///   no compressed audio packet length divides evenly — so the container's times drift against
+    ///   no compressed audio packet length divides evenly - so the container's times drift against
     ///   the true packet grid and snap back at each block, which is audible.
     ///
     /// - Throws: ``MatroskaSampleBufferError``.

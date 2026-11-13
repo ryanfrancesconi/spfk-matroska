@@ -17,7 +17,7 @@ final class MatroskaVideoDecoderTests {
     let webm = TestBundleResources.shared.sample_webm
     let mka = TestBundleResources.shared.sample_mka
 
-    /// Mean luminance of the first plane — enough to tell two frames apart without depending on
+    /// Mean luminance of the first plane - enough to tell two frames apart without depending on
     /// exact pixel values, which vary with the decoder's output format.
     private func meanLuma(_ pixelBuffer: CVPixelBuffer) -> Double {
         CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
@@ -62,7 +62,7 @@ final class MatroskaVideoDecoderTests {
         #expect(abs(frame.timestamp - 0.048) < 0.001)
     }
 
-    /// A picture, not a blank buffer — an all-black or all-grey result would satisfy the dimension
+    /// A picture, not a blank buffer - an all-black or all-grey result would satisfy the dimension
     /// assertions and mean the decode produced nothing usable.
     @Test func theDecodedPictureHasContent() throws {
         let decoder = try MatroskaVideoDecoder(url: mkv)
@@ -121,7 +121,7 @@ final class MatroskaVideoDecoderTests {
         }
     }
 
-    /// VP9 decodes, which needs ``SupplementalVideoDecoders`` to have registered — the decoder is
+    /// VP9 decodes, which needs ``SupplementalVideoDecoders`` to have registered - the decoder is
     /// not in a process that never asked for it, and its absence reads exactly like a machine with
     /// no VP9 hardware.
     @Test func decodesWebMVP9() throws {
@@ -136,7 +136,7 @@ final class MatroskaVideoDecoderTests {
     /// The registration itself, asserted where it is visible: VideoToolbox reports no VP9 hardware
     /// until asked for the decoder.
     ///
-    /// One-directional on purpose — registration is process-global and another test may have run
+    /// One-directional on purpose - registration is process-global and another test may have run
     /// first, so this can only assert the state that holds afterwards.
     @Test func registeringSupplementalDecodersMakesVP9Available() {
         SupplementalVideoDecoders.register()
@@ -160,7 +160,7 @@ final class MatroskaVideoDecoderTests {
     }
 
     /// The poster frame both products call, sampled at the shared midpoint rule rather than at
-    /// frame zero — the difference between a thumbnail and a black rectangle.
+    /// frame zero - the difference between a thumbnail and a black rectangle.
     @Test func posterFrameComesFromTheMidpointNotTheOpening() throws {
         let poster = try #require(MatroskaVideoDecoder.posterCGImage(url: mkv))
         let opening = try #require(try MatroskaVideoDecoder.firstCGImage(url: mkv))
@@ -189,7 +189,7 @@ final class MatroskaVideoDecoderTests {
 final class MatroskaSeekTests {
     let mkv = TestBundleResources.shared.sample_mkv
 
-    /// A seek must land on a keyframe at or **before** the requested time — never after, or the
+    /// A seek must land on a keyframe at or **before** the requested time - never after, or the
     /// decoder starts mid-GOP with no reference frames and produces garbage.
     @Test func seekLandsOnTheKeyframeAtOrBeforeTheRequest() throws {
         let reader = try MatroskaFrameReader(url: mkv)
@@ -247,7 +247,7 @@ final class MatroskaSeekTests {
     /// The layout real muxers write: the `SeekHead` at the head of the file names a second one
     /// rather than naming `Cues`. libwebm keeps only the first `SeekHead` and never follows a
     /// nested entry, so reading no further finds no index at all and the seek falls back to the
-    /// start of the file — indistinguishable from working, and black on anything that opens dark.
+    /// start of the file - indistinguishable from working, and black on anything that opens dark.
     @Test func seeksInAFileWhoseSeekHeadIsNested() throws {
         let url = TestBundleResources.shared.sample_nested_seekhead_mkv
         let reader = try MatroskaFrameReader(url: url)
@@ -311,7 +311,7 @@ struct MatroskaFilmstripTests {
         #expect(delivered == [0.5])
     }
 
-    /// Different points in the file must give different pictures — the failure this guards is a
+    /// Different points in the file must give different pictures - the failure this guards is a
     /// strip of one frame repeated, which a count check alone would pass.
     @Test func framesAtDifferentTimesDiffer() throws {
         let images = try MatroskaVideoDecoder.cgImages(url: mkv, at: [0.1, 1.6])

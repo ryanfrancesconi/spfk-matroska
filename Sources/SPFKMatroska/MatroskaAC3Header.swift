@@ -8,7 +8,7 @@ import Foundation
 /// A channel count does not determine an AC-3 layout except at 1 and 6: four channels can be
 /// 3/1, 2/2 or 3/0 + LFE. Every syncframe states its own, and Matroska carries no other record of it.
 public struct MatroskaAC3Header: Hashable, Sendable {
-    /// Whether this is an E-AC-3 frame (`bsid` 11–16) rather than AC-3 (`bsid` 0–10).
+    /// Whether this is an E-AC-3 frame (`bsid` 11-16) rather than AC-3 (`bsid` 0-10).
     public let isEnhanced: Bool
 
     /// The audio coding mode: front and surround channels, A/52 Table 5.8. 0 is two independent
@@ -72,7 +72,7 @@ public struct MatroskaAC3Header: Hashable, Sendable {
     }
 
     /// The layout Core Audio's decoder outputs for this configuration, or `nil` for one not yet
-    /// measured — dual mono, 2/1 and 2/2 + LFE among them.
+    /// measured - dual mono, 2/1 and 2/2 + LFE among them.
     public var channelLayoutTag: AudioChannelLayoutTag? {
         switch (audioCodingMode, hasLFE) {
         case (1, false): kAudioChannelLayoutTag_Mono

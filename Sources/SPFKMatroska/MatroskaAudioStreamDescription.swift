@@ -109,7 +109,7 @@ public extension MatroskaTrack {
     /// The Opus encoder priming this track's stream begins with, in 48 kHz frames.
     ///
     /// **Core Audio decodes these as audio and nothing downstream trims them**, so an Opus track
-    /// decodes this many frames longer than the container's timeline — measured 2026-08-10 against
+    /// decodes this many frames longer than the container's timeline - measured 2026-08-10 against
     /// ffmpeg, which does trim. Not yet applied by ``MatroskaAudioDecoder``; the value is here so
     /// that whatever applies it reads the file rather than assuming libopus's 312-frame default.
     ///
@@ -193,7 +193,7 @@ public extension MatroskaTrack {
         )
     }
 
-    /// Interleaved, packed, one frame per packet — a Matroska PCM block is raw samples with no
+    /// Interleaved, packed, one frame per packet - a Matroska PCM block is raw samples with no
     /// framing of any kind.
     private func pcmStreamDescription(
         parameters: AudioParameters,
@@ -273,7 +273,7 @@ public struct MatroskaFLACStreamInfo: Hashable, Sendable {
     /// Reads a Matroska FLAC track's `CodecPrivate`, which holds the file's header stream: the
     /// `fLaC` marker, then metadata blocks of which `STREAMINFO` is always the first.
     ///
-    /// Accepts a bare `STREAMINFO` payload too — the marker and block header are what a muxer is
+    /// Accepts a bare `STREAMINFO` payload too - the marker and block header are what a muxer is
     /// most likely to differ on, and the 34-byte body is unambiguous either way.
     public init?(codecPrivate: Data) {
         let bytes = [UInt8](codecPrivate)

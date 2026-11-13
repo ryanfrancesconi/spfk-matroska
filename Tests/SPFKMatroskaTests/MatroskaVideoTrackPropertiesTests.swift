@@ -110,7 +110,7 @@ final class MatroskaVideoTrackPropertiesTests {
         #expect(result.quickTimeUserData == nil)
     }
 
-    /// A container AVFoundation *can* open must not be diverted — same values as the plain read,
+    /// A container AVFoundation *can* open must not be diverted - same values as the plain read,
     /// including the QuickTime user data the Matroska path has no way to produce.
     @Test func readAnyContainerLeavesAVFoundationFormatsAlone() async throws {
         let plain = await VideoTrackReader.read(from: mov)
@@ -130,7 +130,7 @@ final class MatroskaVideoTrackPropertiesTests {
     }
 
     /// `DisplayWidth`/`DisplayHeight` are only a resolution when `DisplayUnit` says pixels, and
-    /// ffmpeg writes `4` here — outside the set this package models — alongside display dimensions
+    /// ffmpeg writes `4` here - outside the set this package models - alongside display dimensions
     /// that happen to match the pixel ones. So the unit is genuinely read rather than defaulted
     /// (mkvparser defaults it to 0), and anything unmodeled falls back to the pixel dimensions
     /// instead of trusting values whose unit is not known to be pixels.

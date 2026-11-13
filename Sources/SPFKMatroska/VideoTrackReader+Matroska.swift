@@ -4,7 +4,7 @@ import Foundation
 import SPFKVideo
 
 /// Extends `spfk-video`'s reader from here rather than beside it, because the dependency cannot run
-/// the other way — `spfk-video` is a pure-Swift leaf with many dependents and must not pull C++ in
+/// the other way - `spfk-video` is a pure-Swift leaf with many dependents and must not pull C++ in
 /// for a feature one of them uses.
 public extension VideoTrackReader {
     /// ``VideoTrackReader/read(from:)`` with containers AVFoundation cannot open filled in.
@@ -14,8 +14,8 @@ public extension VideoTrackReader {
     /// A `.mkv` has a video track whether or not the AV stack can see it, so the unqualified
     /// question has to be answered by whatever can answer it.
     ///
-    /// Only the video track is filled. `isPlayable` stays as AVFoundation reported it — the file
-    /// genuinely cannot be played yet, which is what the row's status indicator says — and
+    /// Only the video track is filled. `isPlayable` stays as AVFoundation reported it - the file
+    /// genuinely cannot be played yet, which is what the row's status indicator says - and
     /// `quickTimeUserData` stays nil, being a `moov`-atom concept with no Matroska equivalent.
     static func readAnyContainer(
         from url: URL
@@ -42,7 +42,7 @@ public extension VideoTrackReader {
     /// Whether a file typed as video by its extension held nothing any reader could use: no video
     /// track, and neither AVFoundation nor the demuxer plays it.
     ///
-    /// Only meaningful for a file that exists — a file on an unmounted volume fails every read, so
+    /// Only meaningful for a file that exists - a file on an unmounted volume fails every read, so
     /// the caller decides whether a verdict may be recorded before asking.
     static func isUnreadableVideo(
         videoTrack: VideoTrackProperties?,

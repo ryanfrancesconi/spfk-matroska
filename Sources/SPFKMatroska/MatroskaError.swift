@@ -8,7 +8,7 @@ public enum MatroskaError: Error, Equatable, Sendable {
     /// The file could not be opened for reading.
     case unreadableFile(URL)
 
-    /// No valid EBML header — the file is not Matroska or WebM at all.
+    /// No valid EBML header - the file is not Matroska or WebM at all.
     case notMatroska(URL)
 
     /// An EBML header is present but the segment headers are malformed.
@@ -45,7 +45,7 @@ extension MatroskaError {
 // MARK: - LocalizedError
 
 extension MatroskaError: LocalizedError {
-    /// Deliberately plain English rather than a localized string, matching `VideoEditError` — the
+    /// Deliberately plain English rather than a localized string, matching `VideoEditError` - the
     /// user-facing wording lives in the UI layer, which is where the catalogs are.
     public var errorDescription: String? {
         switch self {

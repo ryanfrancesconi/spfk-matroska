@@ -12,7 +12,7 @@ import Testing
 /// container states.
 @Suite(.tags(.file), .serialized)
 final class MatroskaTimecodeFrameRateTests {
-    /// **`preciseFrameRate` is nil here and always will be** — it is AVFoundation's exact rational
+    /// **`preciseFrameRate` is nil here and always will be** - it is AVFoundation's exact rational
     /// match, and AVFoundation cannot open this container. A caller reading it instead of
     /// `timecodeFrameRate` gets no timecode for any Matroska file.
     @Test func statesNoPreciseRateButStillResolvesOne() throws {

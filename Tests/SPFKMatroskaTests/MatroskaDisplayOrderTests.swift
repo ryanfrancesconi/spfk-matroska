@@ -13,7 +13,7 @@ import VideoToolbox
 ///
 /// `sample.mkv` carries B-frames, so the order frames are stored in is not the order they are shown
 /// in. These pin *where* that is resolved, because writing a reorder buffer when the system already
-/// has one would be inventing work — and writing one in the wrong place would be worse.
+/// has one would be inventing work - and writing one in the wrong place would be worse.
 @Suite(.tags(.file), .serialized)
 struct MatroskaDisplayOrderTests {
     private let mkv = TestBundleResources.shared.sample_mkv
@@ -45,12 +45,12 @@ struct MatroskaDisplayOrderTests {
 
     /// **`VTDecompressionSession` will not reorder these, even asked to.** Temporal processing is
     /// VideoToolbox's own reordering, and it stays inert here because the sample buffers carry no
-    /// decode timestamp — `CMSampleTimingInfo.decodeTimeStamp` is `.invalid`, deliberately, since
+    /// decode timestamp - `CMSampleTimingInfo.decodeTimeStamp` is `.invalid`, deliberately, since
     /// Matroska stores no container-level DTS.
     ///
     /// Recorded as a test rather than a comment because it is the fact that decides the design: a
     /// pull-based decoder that had to emit presentation order would need synthesized decode
-    /// timestamps first. Nothing needs that today — see the display-layer test below — and this
+    /// timestamps first. Nothing needs that today - see the display-layer test below - and this
     /// fails loudly if a future OS starts reordering without them, which would mean the constraint
     /// has lifted.
     @Test func videoToolboxDoesNotReorderWithoutDecodeTimestamps() throws {
@@ -106,7 +106,7 @@ struct MatroskaDisplayLayerTests {
     private let mkv = TestBundleResources.shared.sample_mkv
 
     /// Accepting every frame without failing is what says the format description, the timing and
-    /// the sync attachments are all shaped the way the renderer expects — a wrong `avcC`, a missing
+    /// the sync attachments are all shaped the way the renderer expects - a wrong `avcC`, a missing
     /// keyframe marker or a bad timescale puts the layer into `.failed` with an error.
     @Test func acceptsEveryFrameOfTheFile() throws {
         let reader = try MatroskaFrameReader(url: mkv)
@@ -129,7 +129,7 @@ struct MatroskaDisplayLayerTests {
         #expect(layer.status != .failed)
     }
 
-    /// A WebM whose codec this machine cannot decode must still be *accepted* by the layer — the
+    /// A WebM whose codec this machine cannot decode must still be *accepted* by the layer - the
     /// container work and the format description are sound either way, and only decode is missing.
     /// Keeps a VP9 failure from being read as a demuxer bug.
     @Test func acceptsWebMFramesRegardlessOfDecodeSupport() throws {

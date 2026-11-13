@@ -72,7 +72,7 @@ struct MatroskaAudioStreamDescriptionTests {
     }
 
     /// FLAC admits depths Core Audio has no flag for, and there is no neighboring value to round to
-    /// — a flag that disagrees with the stream decodes to silence.
+    /// - a flag that disagrees with the stream decodes to silence.
     @Test func flacAtAnUnmappableDepthIsRefused() throws {
         let track = MatroskaTrack.stub(
             codecID: "A_FLAC",
@@ -110,7 +110,7 @@ struct MatroskaAudioStreamDescriptionTests {
 
         #expect(variable.audioFramesPerPacket == nil)
 
-        // Still decodable — a variable-block stream decodes fine, it just cannot be timed by grid.
+        // Still decodable - a variable-block stream decodes fine, it just cannot be timed by grid.
         #expect(variable.isDecodable)
     }
 
@@ -203,7 +203,7 @@ struct MatroskaAudioStreamDescriptionTests {
     }
 
     /// Matroska inherits WAV's rule that 8-bit integer samples are unsigned and wider ones signed,
-    /// under one CodecID — so signedness cannot be read off the codec table.
+    /// under one CodecID - so signedness cannot be read off the codec table.
     @Test func eightBitPCMIsUnsigned() throws {
         let wide = try MatroskaTrack.stub(codecID: "A_PCM/INT/LIT", bitDepth: 16)
             .makeAudioStreamBasicDescription()
@@ -316,7 +316,7 @@ private extension Data {
         bytes += [0, 0, 0, 0, 0, 0]
 
         // 20 bits of sample rate, 3 of channels less one, 5 of depth less one, then 36 of total
-        // samples — 64 bits from byte 10, of which only the first 28 are set here.
+        // samples - 64 bits from byte 10, of which only the first 28 are set here.
         let packed = UInt64(sampleRate) << 44
             | UInt64(channels - 1) << 41
             | UInt64(bitsPerSample - 1) << 36

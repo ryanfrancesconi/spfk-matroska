@@ -31,7 +31,7 @@ final class MatroskaSampleBufferTests {
         #expect(dimensions.height == 120)
     }
 
-    /// The `avcC` has to arrive verbatim — Matroska stores exactly the ISO-BMFF configuration box,
+    /// The `avcC` has to arrive verbatim - Matroska stores exactly the ISO-BMFF configuration box,
     /// which is why the demuxer hands the blob back untouched and nothing rewrites it.
     @Test func carriesTheCodecPrivateThroughAsAnAtom() throws {
         let track = try #require(try MatroskaFile(url: mkv).videoTrack)
@@ -88,7 +88,7 @@ final class MatroskaSampleBufferTests {
     }
 
     /// H.264 keeps its parameter sets out of band, so a track with no `CodecPrivate` cannot be
-    /// described and therefore cannot be decoded — undecodable rather than a thrown error.
+    /// described and therefore cannot be decoded - undecodable rather than a thrown error.
     @Test func reportsUndecodableForH264WithNoCodecPrivate() {
         #expect(MatroskaTrack.videoStub(codecID: "V_MPEG4/ISO/AVC").isDecodable == false)
     }
@@ -147,7 +147,7 @@ final class MatroskaSampleBufferTests {
     // MARK: - Decoding
 
     /// **The one that matters.** Everything above inspects objects this code built, which proves
-    /// only self-consistency. This hands one to VideoToolbox and requires a picture back — the
+    /// only self-consistency. This hands one to VideoToolbox and requires a picture back - the
     /// first thing that would fail if the `avcC` were mangled, the dimensions wrong, or the frame
     /// data in the wrong NAL format.
     @Test func aFrameDecodesThroughVideoToolbox() throws {

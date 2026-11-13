@@ -14,7 +14,7 @@ public extension MatroskaVideoDecoder {
     ///
     /// Keyed by the *requested* timestamp rather than the frame's own, so an evenly spaced request
     /// comes back evenly spaced and a filmstrip stays visually uniform. A timestamp that yields no
-    /// picture, or whose seek or decode fails, is absent rather than zero — callers already draw a
+    /// picture, or whose seek or decode fails, is absent rather than zero - callers already draw a
     /// gap for a missing frame. Only failing to open the file throws.
     ///
     /// A file with no index still fills the strip, by decoding on to each target: seeking is what
@@ -129,7 +129,7 @@ extension CGImage {
     /// Scaled so its longest edge is `maximumSize`, or itself when already smaller.
     ///
     /// Local rather than `SPFKUtils`'s equivalent, which takes an exact size and which this package
-    /// does not depend on — the aspect arithmetic is the part worth not duplicating at call sites.
+    /// does not depend on - the aspect arithmetic is the part worth not duplicating at call sites.
     func scaledPreservingAspect(to maximumSize: CGFloat) -> CGImage? {
         let longestEdge = CGFloat(max(width, height))
 

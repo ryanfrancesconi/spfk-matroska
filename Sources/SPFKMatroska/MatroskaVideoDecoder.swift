@@ -32,7 +32,7 @@ public struct MatroskaVideoFrame {
 /// **The decoder is Apple's.** This package demuxes and describes; the codecs are pool-licensed and
 /// macOS already ships decoders for them.
 ///
-/// Frames come back in **decode order, not presentation order** — a stream with B-frames stores
+/// Frames come back in **decode order, not presentation order** - a stream with B-frames stores
 /// them reordered and each decoded picture carries its own presentation timestamp. Anything showing
 /// them in sequence has to order by ``MatroskaVideoFrame/timestamp``; anything wanting a single
 /// picture does not care.
@@ -93,7 +93,7 @@ public final class MatroskaVideoDecoder {
 
     /// Decodes the next picture, or `nil` at the end of the track.
     ///
-    /// Frames that decode to nothing — a stream can legitimately contain them — are skipped rather
+    /// Frames that decode to nothing - a stream can legitimately contain them - are skipped rather
     /// than returned as a gap, so a caller always gets a picture or the end. A stream that decodes
     /// to no pictures at all throws ``MatroskaVideoDecoderError/decodeFailed(_:status:)`` with
     /// `noErr` instead of reading as empty.
@@ -145,7 +145,7 @@ public final class MatroskaVideoDecoder {
         return nil
     }
 
-    /// The first picture in the file — the cheapest thing to show for a container nothing else can
+    /// The first picture in the file - the cheapest thing to show for a container nothing else can
     /// open, and the one frame reachable without a seek index.
     public func firstImage() throws -> MatroskaVideoFrame? {
         try nextImage()
@@ -168,8 +168,8 @@ public final class MatroskaVideoDecoder {
 
     /// The poster frame for a Matroska file, or `nil` for anything this package cannot open.
     ///
-    /// Samples ``SPFKVideo/VideoFrameExtractor/posterFrameTimestamp(duration:)`` — the same rule
-    /// AVFoundation-openable formats get — so a Matroska thumbnail and an MP4 one sitting next to
+    /// Samples ``SPFKVideo/VideoFrameExtractor/posterFrameTimestamp(duration:)`` - the same rule
+    /// AVFoundation-openable formats get - so a Matroska thumbnail and an MP4 one sitting next to
     /// each other in a list come from the same place in their respective files. A file reporting no
     /// duration falls back to the first frame, which is all there is to offer.
     ///
@@ -181,7 +181,7 @@ public final class MatroskaVideoDecoder {
     /// The container is identified by reading its EBML header rather than by extension, so there is
     /// no list here to fall out of step with the ones in `AudioFileType`.
     ///
-    /// Synchronous and not cheap — a seek plus one keyframe decode. Call it off the main actor.
+    /// Synchronous and not cheap - a seek plus one keyframe decode. Call it off the main actor.
     public static func posterCGImage(url: URL) -> CGImage? {
         do {
             let duration = try MatroskaFile(url: url).duration ?? 0
@@ -261,7 +261,7 @@ public enum MatroskaVideoDecoderError: Error, Equatable, Sendable {
 }
 
 extension MatroskaVideoDecoderError: LocalizedError {
-    /// Plain English rather than a localized string, matching the other error types here — the
+    /// Plain English rather than a localized string, matching the other error types here - the
     /// user-facing wording lives in the UI layer, where the catalogs are.
     public var errorDescription: String? {
         switch self {

@@ -45,7 +45,7 @@ public struct MatroskaTrack: Hashable, Sendable, Identifiable {
     /// Video parameters, as the file states them. Nothing here is derived, and only a size Core
     /// Media cannot take is corrected, to 0.
     public struct VideoParameters: Hashable, Sendable {
-        /// The encoded frame size — what a decoder produces.
+        /// The encoded frame size - what a decoder produces.
         public let pixelWidth: Int
         public let pixelHeight: Int
 
@@ -60,7 +60,7 @@ public struct MatroskaTrack: Hashable, Sendable, Identifiable {
         public let displayUnit: DisplayUnit
 
         /// The `FrameRate` element. Deprecated in Matroska and omitted by most muxers, so this is
-        /// usually `nil` — ``MatroskaTrack/frameRate`` derives the real answer.
+        /// usually `nil` - ``MatroskaTrack/frameRate`` derives the real answer.
         public let declaredFrameRate: Double?
 
         /// A pixel dimension beyond what Core Media accepts reads as 0.
@@ -103,7 +103,7 @@ public struct MatroskaTrack: Hashable, Sendable, Identifiable {
     /// identifier rather than an index into ``MatroskaFile/tracks``.
     public let number: Int
 
-    /// `TrackUID` — identity that survives a remux, where ``number`` is positional and does not.
+    /// `TrackUID` - identity that survives a remux, where ``number`` is positional and does not.
     /// What a selection persisted across sessions is keyed on; ``number`` is what a reader is
     /// opened with. A track stating none, or one another track also states, gets
     /// `number | 1 << 63`, which survives only as long as the file is not remuxed.
@@ -126,11 +126,11 @@ public struct MatroskaTrack: Hashable, Sendable, Identifiable {
     /// `language(NULL)`), so it is applied here, as ffmpeg does.
     public let language: String?
 
-    /// `CodecPrivate` — the codec's out-of-band setup data, needed to build a format description.
+    /// `CodecPrivate` - the codec's out-of-band setup data, needed to build a format description.
     /// For H.264 this is the `avcC` blob verbatim.
     public let codecPrivate: Data?
 
-    /// `DefaultDuration` in nanoseconds — how long one frame lasts. `nil` when unstated.
+    /// `DefaultDuration` in nanoseconds - how long one frame lasts. `nil` when unstated.
     public let defaultFrameDurationNanoseconds: UInt64?
 
     /// Whether the frames are stored compressed or encrypted in a way this package does not undo,
@@ -139,7 +139,7 @@ public struct MatroskaTrack: Hashable, Sendable, Identifiable {
 
     /// Frames per second, preferring the declared `FrameRate` and falling back to the reciprocal of
     /// ``defaultFrameDurationNanoseconds``. `nil` when the file states neither, which is normal for
-    /// variable-frame-rate captures — the real rate is then only knowable by walking clusters.
+    /// variable-frame-rate captures - the real rate is then only knowable by walking clusters.
     public var frameRate: Double? {
         if case let .video(parameters) = kind, let declared = parameters.declaredFrameRate, declared > 0 {
             return declared
@@ -155,7 +155,7 @@ public struct MatroskaTrack: Hashable, Sendable, Identifiable {
     /// The presentation size in pixels, resolving Matroska's rule that an omitted `DisplayWidth`/
     /// `DisplayHeight` means the pixel dimensions. `nil` for a non-video track.
     ///
-    /// Falls back to the pixel size when `DisplayUnit` is anything but pixels — centimeters,
+    /// Falls back to the pixel size when `DisplayUnit` is anything but pixels - centimeters,
     /// inches and a bare aspect ratio are all real values there, and none of them is a resolution.
     public var displaySize: CGSize? {
         guard case let .video(parameters) = kind else {

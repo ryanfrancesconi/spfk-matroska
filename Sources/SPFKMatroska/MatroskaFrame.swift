@@ -3,7 +3,7 @@
 import Foundation
 import SPFKMatroskaC
 
-/// One compressed frame, still encoded — this package demuxes and never decodes.
+/// One compressed frame, still encoded - this package demuxes and never decodes.
 public struct MatroskaFrame: Hashable, Sendable {
     /// The `TrackNumber` this frame belongs to, matching ``MatroskaTrack/number``.
     public let trackNumber: Int
@@ -13,7 +13,7 @@ public struct MatroskaFrame: Hashable, Sendable {
 
     /// Presentation time in seconds from the start of the segment.
     ///
-    /// Matroska stores presentation time and has no container-level decode timestamp — a decoder
+    /// Matroska stores presentation time and has no container-level decode timestamp - a decoder
     /// reorders from the codec's own information. So in a stream with B-frames these are **not**
     /// monotonic in stored order, which is correct rather than a parse error.
     public let timestamp: TimeInterval

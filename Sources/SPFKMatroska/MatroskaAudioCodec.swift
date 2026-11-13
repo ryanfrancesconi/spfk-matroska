@@ -35,7 +35,7 @@ public enum MatroskaAudioCodec: String, Sendable, CaseIterable {
     ///
     /// AAC is the LC figure; a HE-AAC stream doubles it through SBR, which the magic cookie
     /// describes rather than this. **FLAC is zero because its figure belongs to the file rather than
-    /// to the codec** — ``MatroskaTrack/audioFramesPerPacket`` reads it from STREAMINFO. **Opus is
+    /// to the codec** - ``MatroskaTrack/audioFramesPerPacket`` reads it from STREAMINFO. **Opus is
     /// zero because it belongs to the packet**: each one states its own frame size in its TOC byte,
     /// and a stream may mix 2.5 ms through 60 ms freely. E-AC-3's is the six-block default; each
     /// syncframe states its own, which ``MatroskaTrack/audioFrameCount(forPacket:)`` reads.
@@ -85,6 +85,6 @@ public enum MatroskaAudioCodec: String, Sendable, CaseIterable {
 public enum MatroskaPCMSampleFormat: Hashable, Sendable {
     case integer(isBigEndian: Bool)
 
-    /// IEEE 754, little endian — the only byte order Matroska defines for float PCM.
+    /// IEEE 754, little endian - the only byte order Matroska defines for float PCM.
     case float
 }

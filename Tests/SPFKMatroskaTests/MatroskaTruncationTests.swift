@@ -6,7 +6,7 @@ import Testing
 
 @testable import SPFKMatroska
 
-/// A file cut short — a crashed recording — reads up to where it stops.
+/// A file cut short - a crashed recording - reads up to where it stops.
 @Suite(.tags(.file), .serialized)
 final class MatroskaTruncationTests {
     private func temporaryCopy(of data: Data) throws -> URL {

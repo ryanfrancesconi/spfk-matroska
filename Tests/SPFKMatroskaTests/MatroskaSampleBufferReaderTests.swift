@@ -31,7 +31,7 @@ struct MatroskaSampleBufferReaderTests {
         return (video, audio)
     }
 
-    /// One walk yields both tracks, and every frame in the file is accounted for — 149 across the
+    /// One walk yields both tracks, and every frame in the file is accounted for - 149 across the
     /// two, which is what `ffprobe -show_packets` counts.
     @Test func oneWalkYieldsBothTracks() throws {
         let (video, audio) = try readAll(url: mkv)
@@ -40,7 +40,7 @@ struct MatroskaSampleBufferReaderTests {
         #expect(audio.count == 89)
     }
 
-    /// The tracks arrive interleaved rather than one after the other — the property that lets a
+    /// The tracks arrive interleaved rather than one after the other - the property that lets a
     /// player feed two renderers without seeking. Audio for the first second must show up while
     /// video for the first second is still coming.
     @Test func tracksArriveInterleavedNotSequentially() throws {
@@ -53,7 +53,7 @@ struct MatroskaSampleBufferReaderTests {
         #expect(batch.isEndOfFile == false)
     }
 
-    /// Reading past the end keeps answering "end", rather than throwing or restarting — a feed loop
+    /// Reading past the end keeps answering "end", rather than throwing or restarting - a feed loop
     /// that races one extra batch must not be punished for it.
     @Test func readingPastTheEndStaysAtTheEnd() throws {
         let reader = try MatroskaSampleBufferReader(url: mkv)
@@ -65,7 +65,7 @@ struct MatroskaSampleBufferReaderTests {
         #expect(extra.isEndOfFile)
     }
 
-    /// Stored order, not presentation order — the property the display path depends on. Sorting the
+    /// Stored order, not presentation order - the property the display path depends on. Sorting the
     /// timestamps must still recover the whole track, which is what says nothing was dropped.
     @Test func videoArrivesInStoredOrderCoveringTheWholeTrack() throws {
         let timestamps = try readAll(url: mkv).video.map(\.presentationTimeStamp.seconds)
@@ -81,7 +81,7 @@ struct MatroskaSampleBufferReaderTests {
     ///
     /// **Strictly** ascending, which is the part that matters. Matroska laces several audio frames
     /// into one block and stores a single timestamp for it, so a reader that reports the block's
-    /// time for each of them hands a renderer a pile of packets all claiming the same instant —
+    /// time for each of them hands a renderer a pile of packets all claiming the same instant -
     /// audible as a stutter, and invisible to any check that only asks whether the list is sorted.
     ///
     /// Verified against a real laced file (`DualAudio` anime rips lace; a WEBRip typically does
@@ -100,7 +100,7 @@ struct MatroskaSampleBufferReaderTests {
 
     /// Audio packets sit on the codec's own grid, not the container's.
     ///
-    /// Matroska quantizes block timestamps to `TimecodeScale` — a millisecond — and no compressed
+    /// Matroska quantizes block timestamps to `TimecodeScale` - a millisecond - and no compressed
     /// packet length divides that evenly, so reading times straight out of the container gives a
     /// sawtooth: an AAC packet is 23.22 ms at 44.1 kHz, stored as alternating 23 and 24. Measured
     /// on two real films, the spacing is now exact to the sample across 400+ packets where it
@@ -147,8 +147,8 @@ struct MatroskaSampleBufferReaderTests {
     }
 
     /// WebM's Opus track is described and fed alongside the picture, which is what gives a `.webm`
-    /// sound in TorchTag. Core Audio decodes Opus — it is in
-    /// `kAudioFormatProperty_DecodeFormatIDs` — so no bundled library is involved.
+    /// sound in TorchTag. Core Audio decodes Opus - it is in
+    /// `kAudioFormatProperty_DecodeFormatIDs` - so no bundled library is involved.
     ///
     /// An undescribable audio track is dropped rather than failing the open
     /// (`MatroskaSampleBufferReader.init`); no bundled fixture carries one, since every bundled
@@ -168,7 +168,7 @@ struct MatroskaSampleBufferReaderTests {
     /// **Every audio buffer must carry numeric timing, or the renderer silently drops all of them.**
     /// Matroska states no block duration, so a buffer that falls back to container timing gets an
     /// invalid one and `AVSampleBufferAudioRenderer` refuses it with
-    /// `kCMSampleBufferError_SampleTimingInfoInvalid` (-12740) — the picture plays and the file is
+    /// `kCMSampleBufferError_SampleTimingInfoInvalid` (-12740) - the picture plays and the file is
     /// mute, which reads as a decoder problem and is not one.
     ///
     /// Asserted for both codecs: AAC has a fixed packet length and Opus states one per packet, and
@@ -191,7 +191,7 @@ struct MatroskaSampleBufferReaderTests {
     }
 
     /// Opus packet lengths come from each packet rather than a track-level figure, and this file
-    /// mixes them — 501 packets decode to 480,840 frames where a uniform 960 would give 480,960.
+    /// mixes them - 501 packets decode to 480,840 frames where a uniform 960 would give 480,960.
     @Test func opusPacketLengthsAreReadFromEachPacket() throws {
         let track = try #require(try MatroskaFile(url: webm).audioTrack)
 

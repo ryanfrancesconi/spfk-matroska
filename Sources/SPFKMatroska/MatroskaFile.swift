@@ -5,8 +5,8 @@ import SPFKMatroskaC
 
 /// A Matroska or WebM file's headers: everything readable without walking clusters.
 ///
-/// This reads the front of the file — the EBML header and the segment's `Info` and `Tracks`
-/// elements — and stops at the first cluster. Frame data is not touched, so constructing one of
+/// This reads the front of the file - the EBML header and the segment's `Info` and `Tracks`
+/// elements - and stops at the first cluster. Frame data is not touched, so constructing one of
 /// these is cheap regardless of how long the file is.
 public struct MatroskaFile: Hashable, Sendable {
     /// The EBML `DocType` the muxer declared. WebM is a Matroska profile and parses identically;
@@ -28,14 +28,14 @@ public struct MatroskaFile: Hashable, Sendable {
     public let url: URL
     public let docType: DocType
 
-    /// The segment `Title`. Distinct from the `title` tag TagLib reads out of the `Tags` element —
+    /// The segment `Title`. Distinct from the `title` tag TagLib reads out of the `Tags` element -
     /// a file can carry both, and they can disagree.
     public let title: String?
 
     public let muxingApp: String?
     public let writingApp: String?
 
-    /// Nanoseconds per timecode unit — 1,000,000 (millisecond resolution) in practice. Every raw
+    /// Nanoseconds per timecode unit - 1,000,000 (millisecond resolution) in practice. Every raw
     /// timecode in the file is expressed in these units.
     public let timecodeScale: Int64
 

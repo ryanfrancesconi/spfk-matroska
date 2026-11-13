@@ -42,7 +42,7 @@ public final class MatroskaFrameReader {
 
     /// Repositions the walk to the keyframe at or before `timestamp` on `trackNumber`.
     ///
-    /// A lookup in the file's `Cues` index plus one cluster read, not a scan — which is what makes
+    /// A lookup in the file's `Cues` index plus one cluster read, not a scan - which is what makes
     /// a poster frame from the middle of a feature film affordable.
     ///
     /// Frames for *every* track keep arriving afterwards, so a caller wanting one track filters as

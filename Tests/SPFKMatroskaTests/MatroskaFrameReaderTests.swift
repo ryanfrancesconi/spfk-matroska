@@ -12,7 +12,7 @@ import Testing
 ///     ffprobe -v error -show_packets -of csv=p=0 \
 ///       -show_entries packet=stream_index,pts_time,size,flags sample.mkv
 ///
-/// ffprobe's stream 0 is Matroska `TrackNumber` 1 (video) and stream 1 is `TrackNumber` 2 (audio) —
+/// ffprobe's stream 0 is Matroska `TrackNumber` 1 (video) and stream 1 is `TrackNumber` 2 (audio) -
 /// ffprobe indexes from zero, Matroska numbers from one.
 @Suite(.tags(.file), .serialized)
 final class MatroskaFrameReaderTests {
@@ -35,7 +35,7 @@ final class MatroskaFrameReaderTests {
     }
 
     /// Total payload bytes per track, which catches an off-by-one in the lacing header far more
-    /// reliably than a frame count does — a wrong offset still yields the right number of frames.
+    /// reliably than a frame count does - a wrong offset still yields the right number of frames.
     @Test func payloadBytesMatchFfprobe() throws {
         let frames = try MatroskaFrameReader(url: mkv).allFrames()
 
@@ -48,7 +48,7 @@ final class MatroskaFrameReaderTests {
 
     // MARK: - Ordering and timing
 
-    /// Frames come back in stored order, interleaved across tracks — that is what a player consumes
+    /// Frames come back in stored order, interleaved across tracks - that is what a player consumes
     /// and what makes playback possible without seeking.
     @Test func emitsFramesInMuxedOrder() throws {
         let frames = try MatroskaFrameReader(url: mkv).allFrames().prefix(6)
@@ -72,7 +72,7 @@ final class MatroskaFrameReaderTests {
 
     /// **Video timestamps are not monotonic in stored order, and that is correct.** Matroska stores
     /// presentation time with no container-level decode timestamp, so a stream with B-frames is
-    /// stored out of presentation order — third packet at 181ms before the fourth at 115ms. A
+    /// stored out of presentation order - third packet at 181ms before the fourth at 115ms. A
     /// demuxer "fixing" this by sorting would break decode order.
     @Test func videoTimestampsAreNotMonotonicBecauseOfBFrames() throws {
         let video = try MatroskaFrameReader(url: mkv)
@@ -82,7 +82,7 @@ final class MatroskaFrameReaderTests {
         #expect(video.count == 60)
         #expect(zip(video, video.dropFirst()).contains { $0 > $1 })
 
-        // Audio has no reordering, so it is monotonic — the contrast is the point.
+        // Audio has no reordering, so it is monotonic - the contrast is the point.
         let audio = try MatroskaFrameReader(url: mkv)
             .allFrames(ofTrack: Self.audioTrack)
             .map(\.timestamp)
@@ -133,7 +133,7 @@ final class MatroskaFrameReaderTests {
     // MARK: - Frame duration
 
     /// Duration comes from the track's `DefaultDuration`, which is the only place this file states
-    /// one — 1/30s for video. Audio states none, so it is nil rather than zero.
+    /// one - 1/30s for video. Audio states none, so it is nil rather than zero.
     @Test func frameDurationComesFromTheTrackDefault() throws {
         let frames = try MatroskaFrameReader(url: mkv).allFrames()
 
@@ -173,7 +173,7 @@ final class MatroskaFrameReaderTests {
         }
     }
 
-    /// Reading past the end returns nil rather than throwing — a clean end is not a failure.
+    /// Reading past the end returns nil rather than throwing - a clean end is not a failure.
     @Test func returnsNilPastTheEndOfTheFile() throws {
         let reader = try MatroskaFrameReader(url: mkv)
 

@@ -27,7 +27,7 @@ extension MatroskaTrack {
     /// Video-technical properties for a video track, or `nil` for any other kind.
     ///
     /// `duration` is filled by ``MatroskaFile/videoTrackProperties``: Matroska states it on the
-    /// segment. `preciseFrameRate` stays `nil` — resolving one means walking clusters.
+    /// segment. `preciseFrameRate` stays `nil` - resolving one means walking clusters.
     public var videoTrackProperties: VideoTrackProperties? {
         guard case let .video(parameters) = kind else {
             return nil
@@ -44,7 +44,7 @@ extension MatroskaTrack {
 
     /// The width of one pixel over its height, or `nil` for square pixels.
     ///
-    /// `nil` rather than 1.0 for the square case, matching `VideoTrackReader` — AVFoundation omits
+    /// `nil` rather than 1.0 for the square case, matching `VideoTrackReader` - AVFoundation omits
     /// the `PixelAspectRatio` extension entirely for standard video, and a caller comparing the two
     /// paths should see the same absence.
     private var pixelAspectRatio: Double? {
@@ -68,12 +68,12 @@ extension MatroskaFile {
     /// Video-technical properties for the track that would be displayed, or `nil` for a file with
     /// no video track.
     ///
-    /// **`duration` is the segment's, which is an upper bound on the video track's** — Matroska
+    /// **`duration` is the segment's, which is an upper bound on the video track's** - Matroska
     /// states no per-track duration, and deriving one means walking clusters to that track's last
     /// block. The two differ by whatever a sibling audio track runs past the video: measured at
     /// 66ms, about two frames, on the fixture. Reported rather than left blank because it is a real
     /// measurement of the file and the number every other tool shows for a `.mkv`, and the field is
-    /// display-only. **Anything that starts computing with it — a trim range, a seek bound — wants
+    /// display-only. **Anything that starts computing with it - a trim range, a seek bound - wants
     /// the exact track duration instead**, which `MatroskaFrameReader` can derive.
     public var videoTrackProperties: VideoTrackProperties? {
         guard var properties = videoTrack?.videoTrackProperties else {
@@ -90,7 +90,7 @@ extension MatroskaFile {
     /// Returns `nil` instead of throwing, because every caller is completing an already
     /// best-effort parse where a failed read means one blank column rather than a failed import.
     ///
-    /// A file that simply is not Matroska returns `nil` **silently** — callers are allowed to ask
+    /// A file that simply is not Matroska returns `nil` **silently** - callers are allowed to ask
     /// about any URL, so that is an answer rather than a failure, and logging it would put a line
     /// in the console for every unplayable file of every other format. Real read failures on a
     /// file that *is* Matroska still log.

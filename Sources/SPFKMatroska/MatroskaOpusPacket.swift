@@ -4,8 +4,8 @@ import Foundation
 
 /// The length of an Opus packet, read from the packet itself.
 ///
-/// Opus states its frame size per *packet* rather than per stream — one file may mix 2.5 ms through
-/// 60 ms — so there is no track-level figure to place packets on a grid with. The first byte (the
+/// Opus states its frame size per *packet* rather than per stream - one file may mix 2.5 ms through
+/// 60 ms - so there is no track-level figure to place packets on a grid with. The first byte (the
 /// TOC) gives the configuration and how many frames follow it.
 ///
 /// Layout, from RFC 6716 §3.1: the top five bits are the configuration, the next is the stereo

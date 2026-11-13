@@ -12,7 +12,7 @@ import Testing
 final class MatroskaDualAudioTests {
     let url = TestBundleResources.shared.sample_dualaudio_mkv
 
-    /// `audioTrack` answers "the first one", which is the muxer's ordering rather than a choice —
+    /// `audioTrack` answers "the first one", which is the muxer's ordering rather than a choice -
     /// so it cannot be the thing a selector reads.
     @Test func readsBothAudioTracksAndNamesThem() throws {
         let file = try MatroskaFile(url: url)
@@ -45,7 +45,7 @@ final class MatroskaDualAudioTests {
         #expect(reader.audioTrack?.language == "eng")
     }
 
-    /// The parameter that already exists, exercised — opening for the second track selects it
+    /// The parameter that already exists, exercised - opening for the second track selects it
     /// rather than falling back to the first.
     @Test func opensTheRequestedAudioTrack() throws {
         let file = try MatroskaFile(url: url)
@@ -67,7 +67,7 @@ final class MatroskaDualAudioTests {
 
     // MARK: - Neutral description
 
-    /// `TrackUID` is what a persisted selection is keyed on, so it has to actually arrive — a
+    /// `TrackUID` is what a persisted selection is keyed on, so it has to actually arrive - a
     /// bridged field that was never assigned reads as a plausible 0 for every track.
     @Test func carriesADistinctTrackUIDPerTrack() throws {
         let file = try MatroskaFile(url: url)
@@ -136,7 +136,7 @@ final class MatroskaDualAudioTests {
 
     // MARK: - Language
 
-    /// **A file that states no `Language` means English**, which is the element's declared default —
+    /// **A file that states no `Language` means English**, which is the element's declared default -
     /// so a muxer writes it only for everything else. libwebm applies no default, which made an
     /// English track the one track with no language at all, and its menu row the only one without a
     /// language beside it.
@@ -144,7 +144,7 @@ final class MatroskaDualAudioTests {
     /// The element is removed here rather than shipped as a fixture, because no muxer to hand
     /// produces one: ffmpeg writes `und` explicitly (which `sample.mkv` carries and this test
     /// starts from) where mkvmerge omits the element. Replaced by `Void` padding of the same
-    /// length, so every offset in the file is unmoved — the same technique
+    /// length, so every offset in the file is unmoved - the same technique
     /// `sample-nested-seekhead.mkv` was built with.
     @Test func appliesTheSpecDefaultLanguageWhenTheFileStatesNone() throws {
         #expect(try MatroskaFile(url: TestBundleResources.shared.sample_mkv).audioTrack?.language == "und")
@@ -229,7 +229,7 @@ final class MatroskaDualAudioTests {
         #expect(japanese.language == "und")
     }
 
-    /// A stated language still wins — the default fills a gap rather than overwriting.
+    /// A stated language still wins - the default fills a gap rather than overwriting.
     @Test func aStatedLanguageIsNotOverwritten() throws {
         let file = try MatroskaFile(url: url)
 
@@ -260,7 +260,7 @@ final class MatroskaDualAudioTests {
     }
 
     /// **An `.mka` has no video track, and that is the whole test.** `org.matroska.mka` conforms to
-    /// `.audio` rather than `.movie`, so a listing reached through a video test never runs — while
+    /// `.audio` rather than `.movie`, so a listing reached through a video test never runs - while
     /// the demuxer itself never cared.
     @Test func listsTheAudioTracksOfAVideolessMatroskaFile() async throws {
         let mka = TestBundleResources.shared.dualaudio_mka
